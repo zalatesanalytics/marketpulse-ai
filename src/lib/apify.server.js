@@ -276,10 +276,31 @@ export async function collectScrape({ platform, runId }) {
   return { platform, pending: false, items: items.map((item) => normalize(platform, item)).filter(Boolean) };
 }
 
-export function buildQuery(brand, competitors) {
+const STOP_WORDS = new Set(["a", "an", "and", "or", "the", "of", "for", "with", "in", "on"]);
+
+const categoryWords = (category) =>
+  String(category || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word && !STOP_WORDS.has(word))
+    .slice(0, 2)
+    .join(" ");
+
+// A bare brand name can mean anything — "Jordan" pulls the athlete, not the sneaker
+// brand — so the category (or the model's disambiguated phrase) rides along in the search.
+export function buildQuery(brand, competitors, category = "", search = "") {
   const names = [brand, ...String(competitors || "").split(",")]
     .map((n) => n.trim())
     .filter(Boolean)
     .slice(0, 4);
-  return names.length > 1 ? names.join(" OR ") : names[0] || brand;
+  const [name, ...rest] = names;
+  const pinned = String(search || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join(" ");
+  const focus = pinned || [name, categoryWords(category)].filter(Boolean).join(" ");
+  if (!focus) return brand;
+  return [focus, ...rest].join(" OR ");
 }

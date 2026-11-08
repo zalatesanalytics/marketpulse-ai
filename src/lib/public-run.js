@@ -19,6 +19,7 @@ const MessagesInput = z.object({
 const BriefInput = z.object({
   brand: z.string().min(1).max(80),
   category: z.string().max(120),
+  search: z.string().max(120).optional().default(""),
   competitors: z.array(z.string().max(60)).max(3),
   goal: z.string().max(300),
 });

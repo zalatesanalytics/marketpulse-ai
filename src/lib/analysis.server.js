@@ -10,10 +10,11 @@ const BRIEF_SCHEMA = {
   properties: {
     brand: { type: "string" },
     category: { type: "string" },
+    search: { type: "string" },
     competitors: { type: "array", items: { type: "string" } },
     goal: { type: "string" },
   },
-  required: ["brand", "category", "competitors", "goal"],
+  required: ["brand", "category", "search", "competitors", "goal"],
 };
 
 const SCORE_SCHEMA = {
@@ -55,10 +56,11 @@ const SCORE_SCHEMA = {
 
 const extractPrompt = (transcript) => `From this chat between a brand marketer and a social listening desk, extract the subject of the research.
 - brand: the brand or product they want to understand (empty string if they never named one)
-- category: the market category it competes in, otherwise ""
+- category: the market category it competes in, as a short descriptor of two or three words ("sneaker brand", "coffee chain", "airline"), otherwise ""
+- search: a short web search phrase that pins this brand down so that nothing else sharing the name matches. Include the category: "Jordan Brand sneakers" for Jordan, "Safari web browser" for Safari, "Dove soap" for Dove. Use the bare brand only when the name is already unique. Never include a person, a film, a game or a place.
 - competitors: up to three competitors they mentioned, otherwise []
 - goal: the decision this research would support, one sentence, otherwise ""
-Never invent a brand.
+Never invent a brand. The marketer is researching a commercial brand, never a person or an athlete.
 
 CONVERSATION:
 ${transcript}`;
@@ -71,7 +73,9 @@ ${brief.goal ? `The client needs this to decide: "${brief.goal}"` : ""}
 
 For every numbered post return sentiment (positive | neutral | negative, judged toward ${brief.brand}), score between -1 (hostile) and 1 (advocating), reason (max 12 words, grounded only in the post text), and evidence: a fragment of at most 15 words copied word for word from that post which justifies the call.
 Return exactly one row per numbered post, using its number as index. A positive label must carry a score above 0, a negative label below 0. If a post says too little to judge, use neutral with score 0 and say so in reason. Never invent, merge or reorder posts, and never quote text that is not in the post.
-Set offTopic to true when the post is not actually about ${brief.brand} — another company, a game or film with a similar name, or a coincidental word match — and leave its sentiment neutral with score 0 in that case.
+Set offTopic to true when the post is not actually about the brand ${brief.brand}${
+  brief.category ? `, the ${brief.category},` : " the brand:"
+} — a person or athlete with the same name, a different company, a team, place, film, game, or a coincidental word match. Posts about a same-named person say nothing about the brand and must never be scored, summarised or counted. Leave every off-topic post neutral with score 0.
 Then return:
 - summary: 2-3 sentences on what the conversation as a whole says
 - trending_topics: the top 10 topics driving the conversation, most discussed first. Each: topic (2 to 5 words, specific to ${brief.brand}), mentions (listed posts that touch it, never a like or comment count), sentiment
@@ -121,7 +125,7 @@ export async function startScrapes({
   maxItems = PUBLIC_MAX_ITEMS,
   days = PUBLIC_DAYS,
 }) {
-  const query = buildQuery(brief.brand, brief.competitors.join(", "));
+  const query = buildQuery(brief.brand, brief.competitors.join(", "), brief.category, brief.search);
   const settled = await Promise.allSettled(
     platforms.map((platform) => startScrape({ platform, query, maxItems, days }))
   );
@@ -326,6 +330,7 @@ export async function startPublicAnalysis({ base44, messages }) {
   const brief = {
     brand: String(extracted?.brand || "").trim().slice(0, 80),
     category: String(extracted?.category || "").trim().slice(0, 120),
+    search: String(extracted?.search || "").trim().slice(0, 90),
     competitors: (extracted?.competitors || []).slice(0, 3).map((name) => String(name).slice(0, 60)),
     goal: String(extracted?.goal || "").trim().slice(0, 300),
   };
