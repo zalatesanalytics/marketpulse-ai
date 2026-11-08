@@ -31,6 +31,14 @@ const clean = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Links must stay intact, so they skip clean(): it deliberately strips URLs.
+const pickUrl = (...values) => {
+  for (const v of values) {
+    if (typeof v === "string" && /^https?:\/\/\S+$/i.test(v.trim())) return v.trim();
+  }
+  return "";
+};
+
 const pickStr = (...values) => {
   for (const v of values) {
     if (typeof v === "string" && v.trim()) return clean(v);
@@ -135,7 +143,7 @@ function normalize(platform, item) {
       item.channelName
     ) || pickStr(item.author);
 
-  let url = pickStr(item.url, item.link, item.postUrl, item.videoUrl);
+  let url = pickUrl(item.url, item.link, item.postUrl, item.videoUrl, item.permalink);
   if (!url && platform === "x" && item.id) url = `https://x.com/i/status/${item.id}`;
 
   const fields = FIELDS[platform] || {};
