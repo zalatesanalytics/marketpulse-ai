@@ -1,0 +1,1 @@
+"""MarketPulse AI — social listening pipeline used by the Streamlit app."""
