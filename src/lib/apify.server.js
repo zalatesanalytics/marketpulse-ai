@@ -102,10 +102,11 @@ export async function scrapePlatform({ platform, query, maxItems, days = 30 }) {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 170000);
+  // Cap each scrape so one slow platform can't hold the whole run.
+  const timer = setTimeout(() => controller.abort(), 70000);
   try {
     const response = await fetch(
-      `https://api.apify.com/v2/acts/${ACTORS[platform]}/run-sync-get-dataset-items?timeout=160&format=json`,
+      `https://api.apify.com/v2/acts/${ACTORS[platform]}/run-sync-get-dataset-items?timeout=60&format=json`,
       {
         method: "POST",
         headers: {

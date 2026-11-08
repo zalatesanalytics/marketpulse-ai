@@ -3,8 +3,10 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth-middleware";
 import { RATE_PER_ITEM, buildQuery, rankScore, scrapePlatform } from "@/lib/apify.server";
 
-const PER_PLATFORM = 30;
 const TOP_N = 20;
+// Fewer items per platform keeps a run fast; with more platforms each fetches less
+// so the pool still fills the top 20.
+const perPlatform = (count) => (count <= 1 ? 20 : count === 2 ? 16 : 12);
 const PLATFORM_ENUM = z.enum(["reddit", "x", "youtube"]);
 
 /* ---------------------------------------------------------------- reads */
@@ -58,7 +60,7 @@ export const createResearch = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data, context }) => {
-    const estimate = data.platforms.reduce((sum, p) => sum + PER_PLATFORM * RATE_PER_ITEM[p], 0);
+    const estimate = data.platforms.reduce((sum, p) => sum + perPlatform(data.platforms.length) * RATE_PER_ITEM[p], 0);
     return context.getBase44().entities.Research.create({
       ...data,
       status: "running",
@@ -137,7 +139,9 @@ export const runResearch = createServerFn({ method: "POST" })
     const platforms = (research.platforms || []).filter((p) => ["reddit", "x", "youtube"].includes(p));
 
     const settled = await Promise.allSettled(
-      platforms.map((platform) => scrapePlatform({ platform, query, maxItems: PER_PLATFORM, days: 30 }))
+      platforms.map((platform) =>
+        scrapePlatform({ platform, query, maxItems: perPlatform(platforms.length), days: 30 })
+      )
     );
 
     const warnings = [];
