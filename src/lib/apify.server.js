@@ -59,18 +59,21 @@ const FIELDS = {
     likes: ["upVotes", "upvoteCount", "score"],
     comments: ["numberOfComments", "commentsCount", "commentCount"],
     views: ["viewCount", "views"],
+    shares: ["crosspostCount", "crossposts", "shareCount"],
     community: ["communityName", "subreddit"],
   },
   x: {
     likes: ["likeCount", "likes"],
     comments: ["replyCount", "replyCounts", "commentCount"],
     views: ["viewCount", "viewsCount"],
+    shares: ["retweetCount", "repostCount", "retweets", "quoteCount", "shareCount"],
     community: ["author.userName", "username", "authorName"],
   },
   youtube: {
     likes: ["likes", "likeCount"],
     comments: ["commentsCount", "commentCount"],
     views: ["viewCount", "views"],
+    shares: ["shareCount", "shares"],
     community: ["channelName", "channel.name"],
   },
 };
@@ -103,7 +106,7 @@ function buildInput(platform, query, maxItems, days) {
       transcriptionAndSubtitle: "NONE",
     };
   }
-  return { searchTerms: [query], maxItems, sort: "Top" };
+  return { searchTerms: [query], maxItems, queryType: "Top" };
 }
 
 function publishedAt(item) {
@@ -153,6 +156,9 @@ function normalize(platform, item) {
       pickField(item, fields.comments) ||
       pickNum(item.numberOfComments, item.commentCount, item.commentsCount, item.replyCount),
     views: pickField(item, fields.views) || pickNum(item.viewCount, item.views),
+    shares:
+      pickField(item, fields.shares) ||
+      pickNum(item.retweetCount, item.repostCount, item.shareCount, item.crosspostCount, item.shares),
     published_at: publishedAt(item),
   };
 }

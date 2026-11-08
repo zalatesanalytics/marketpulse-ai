@@ -194,6 +194,7 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
       engagement: post.engagement,
       comments: post.comments,
       views: post.views,
+      shares: post.shares || 0,
       published_at: post.published_at,
       trend: post.trend || "steady",
       sentiment: row?.sentiment || "neutral",

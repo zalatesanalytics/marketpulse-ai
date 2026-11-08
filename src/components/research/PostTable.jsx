@@ -16,11 +16,11 @@ export default function PostTable({ posts = [] }) {
   return (
     <>
       <p className="mb-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground md:hidden">
-        Swipe for likes, comments, views and trend →
+        Swipe for likes, shares, comments, views and trend →
       </p>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] border-collapse text-left">
+        <table className="w-full min-w-[760px] border-collapse text-left">
           <thead>
             <tr className="border-b border-border font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="py-2 pr-2 font-normal">#</th>
@@ -28,6 +28,9 @@ export default function PostTable({ posts = [] }) {
               <th className="py-2 pr-3 font-normal">Top post</th>
               <th className="py-2 px-2 text-right font-normal" title="Upvotes on Reddit, likes on X and YouTube">
                 Likes
+              </th>
+              <th className="py-2 px-2 text-right font-normal" title="Reposts on X, crossposts on Reddit">
+                Shares
               </th>
               <th className="py-2 px-2 text-right font-normal">Comments</th>
               <th className="py-2 px-2 text-right font-normal">Views</th>
@@ -70,6 +73,9 @@ export default function PostTable({ posts = [] }) {
                   {value(post.engagement)}
                 </td>
                 <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
+                  {value(post.shares)}
+                </td>
+                <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
                   {value(post.comments)}
                 </td>
                 <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
@@ -96,8 +102,9 @@ export default function PostTable({ posts = [] }) {
       </div>
 
       <p className="mt-3 text-[10.5px] leading-relaxed text-muted-foreground">
-        Likes are upvotes on Reddit. Views are only reported by X and YouTube. Trend compares each post’s engagement
-        per day with the rest of this run.
+        Likes are upvotes on Reddit. Shares are reposts on X and crossposts on Reddit, where the platform reports
+        them. Views are only reported by X and YouTube. Trend compares each post’s engagement per day with the rest
+        of this run.
       </p>
     </>
   );
