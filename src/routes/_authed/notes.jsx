@@ -89,7 +89,8 @@ function NotesPage() {
           </button>
         </div>
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Anyone with this link can leave a note — no account or sign-in. Share it with the clients testing the desk.
+          Anyone with this link lands in the chat with the desk assistant — no account or sign-in. Every question they ask
+          shows up below.
         </p>
       </section>
 

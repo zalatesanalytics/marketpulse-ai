@@ -413,6 +413,52 @@ export const submitClientFeedback = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const CHAT_SYSTEM = `You are the Signal Desk assistant, on the desk's public chat. The visitor is a brand marketer testing the tool, and nobody is signed in.
+Signal Desk scrapes public posts on Reddit, X and YouTube, ranks the top 20 by engagement, scores each one's sentiment and sentiment score, and reports trending topics plus a recommended next move.
+Help the visitor frame what to research: which questions are worth asking, which platforms to start with, how to read sentiment, trending topics and rising versus cooling posts.
+If they ask how to run a study, describe the intake: brand, category, competitors, the decision it supports, and the platforms.
+Keep every reply under 100 words, plain conversational language, no markdown headings or bullet lists longer than three items. Never invent statistics, never claim you browsed a platform, and never promise a report exists. If they want a human, say the research desk replies by email to notes left on this page.`;
+
+// Deliberately public: the shared link opens a chat with no account. Each exchange is
+// saved as a client note so the desk can read what visitors asked.
+export const chatWithDesk = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      messages: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string().min(1).max(2000),
+          })
+        )
+        .min(1)
+        .max(16),
+    })
+  )
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44().asServiceRole;
+    const transcript = data.messages
+      .map((message) => `${message.role === "user" ? "Visitor" : "Desk"}: ${message.content}`)
+      .join("\n");
+
+    const reply = await base44.integrations.Core.InvokeLLM({
+      prompt: `${CHAT_SYSTEM}\n\nCONVERSATION:\n${transcript}\n\nReply as the Desk, to the visitor:`,
+      model: "gemini_3_flash",
+    });
+
+    const question = [...data.messages].reverse().find((message) => message.role === "user");
+    if (question) {
+      await base44.entities.ClientFeedback.create({
+        name: "Chat visitor",
+        topic: "question",
+        status: "new",
+        message: `Visitor: ${question.content}\n\nDesk: ${String(reply || "").trim()}`,
+      }).catch(() => {});
+    }
+
+    return { reply: String(reply || "").trim() };
+  });
+
 export const listClientFeedback = createServerFn({ method: "GET" })
   .middleware([requireUser])
   .handler(async ({ context }) => {
