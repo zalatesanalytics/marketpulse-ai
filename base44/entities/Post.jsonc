@@ -33,7 +33,8 @@
       "description": "Subreddit, channel or handle"
     },
     "url": {
-      "type": "string"
+      "type": "string",
+      "description": "Direct link to the original post"
     },
     "engagement": {
       "type": "number",
@@ -41,7 +42,15 @@
     },
     "shares": {
       "type": "number",
-      "description": "Reposts or shares where the platform reports them"
+      "description": "Total shares where the platform reports them"
+    },
+    "retweets": {
+      "type": "number",
+      "description": "Retweets, only reported by X"
+    },
+    "reposts": {
+      "type": "number",
+      "description": "Reposts and quote posts, only reported by X"
     },
     "comments": {
       "type": "number"

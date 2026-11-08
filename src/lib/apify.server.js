@@ -62,11 +62,14 @@ const FIELDS = {
     shares: ["crosspostCount", "crossposts", "shareCount"],
     community: ["communityName", "subreddit"],
   },
+  // Retweets and reposts are only reported by X, so other platforms leave them empty.
   x: {
     likes: ["likeCount", "likes"],
     comments: ["replyCount", "replyCounts", "commentCount"],
     views: ["viewCount", "viewsCount"],
-    shares: ["retweetCount", "repostCount", "retweets", "quoteCount", "shareCount"],
+    shares: [],
+    retweets: ["retweetCount", "retweets"],
+    reposts: ["quoteCount", "repostCount", "reposts"],
     community: ["author.userName", "username", "authorName"],
   },
   youtube: {
@@ -144,6 +147,9 @@ function normalize(platform, item) {
     item.channel?.name
   );
 
+  const retweets = pickField(item, fields.retweets);
+  const reposts = pickField(item, fields.reposts);
+
   return {
     platform,
     title: title.slice(0, 300),
@@ -156,9 +162,13 @@ function normalize(platform, item) {
       pickField(item, fields.comments) ||
       pickNum(item.numberOfComments, item.commentCount, item.commentsCount, item.replyCount),
     views: pickField(item, fields.views) || pickNum(item.viewCount, item.views),
+    // X reports retweets and reposts separately; their sum is that platform's share count.
     shares:
       pickField(item, fields.shares) ||
-      pickNum(item.retweetCount, item.repostCount, item.shareCount, item.crosspostCount, item.shares),
+      retweets + reposts ||
+      pickNum(item.shareCount, item.crosspostCount, item.shares),
+    retweets,
+    reposts,
     published_at: publishedAt(item),
   };
 }

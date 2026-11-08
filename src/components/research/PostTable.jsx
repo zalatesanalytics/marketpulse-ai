@@ -4,6 +4,8 @@ import { compact, formatDate, PLATFORM_LABEL } from "@/lib/format";
 
 const value = (n) => (n ? compact(n) : "—");
 
+const NUM_CELL = "py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums";
+
 export default function PostTable({ posts = [] }) {
   if (!posts.length) {
     return (
@@ -16,11 +18,11 @@ export default function PostTable({ posts = [] }) {
   return (
     <>
       <p className="mb-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground md:hidden">
-        Swipe for likes, shares, comments, views and trend →
+        Swipe for likes, comments, views, shares, retweets and reposts →
       </p>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left">
+        <table className="w-full min-w-[880px] border-collapse text-left">
           <thead>
             <tr className="border-b border-border font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="py-2 pr-2 font-normal">#</th>
@@ -29,11 +31,17 @@ export default function PostTable({ posts = [] }) {
               <th className="py-2 px-2 text-right font-normal" title="Upvotes on Reddit, likes on X and YouTube">
                 Likes
               </th>
-              <th className="py-2 px-2 text-right font-normal" title="Reposts on X, crossposts on Reddit">
-                Shares
-              </th>
               <th className="py-2 px-2 text-right font-normal">Comments</th>
               <th className="py-2 px-2 text-right font-normal">Views</th>
+              <th className="py-2 px-2 text-right font-normal" title="All shares the platform reports">
+                Shares
+              </th>
+              <th className="py-2 px-2 text-right font-normal" title="Reported by X only">
+                Retweets
+              </th>
+              <th className="py-2 px-2 text-right font-normal" title="Quote posts on X">
+                Reposts
+              </th>
               <th className="py-2 px-2 font-normal">Trend</th>
               <th className="py-2 pl-2 font-normal">Sentiment</th>
             </tr>
@@ -63,24 +71,28 @@ export default function PostTable({ posts = [] }) {
                   <p className="mt-1 truncate font-mono text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground">
                     {[post.community || post.author, formatDate(post.published_at)].filter(Boolean).join(" · ")}
                   </p>
+                  {post.url && (
+                    <a
+                      href={post.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-1 inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-primary underline-offset-2 hover:underline"
+                    >
+                      Open post ↗
+                    </a>
+                  )}
                   {post.sentiment_reason && post.sentiment_reason !== "Not scored" && (
                     <p className="mt-1 line-clamp-1 text-[11px] italic text-muted-foreground">
                       “{post.sentiment_reason}”
                     </p>
                   )}
                 </td>
-                <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
-                  {value(post.engagement)}
-                </td>
-                <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
-                  {value(post.shares)}
-                </td>
-                <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
-                  {value(post.comments)}
-                </td>
-                <td className="py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums">
-                  {value(post.views)}
-                </td>
+                <td className={NUM_CELL}>{value(post.engagement)}</td>
+                <td className={NUM_CELL}>{value(post.comments)}</td>
+                <td className={NUM_CELL}>{value(post.views)}</td>
+                <td className={NUM_CELL}>{value(post.shares)}</td>
+                <td className={NUM_CELL}>{value(post.retweets)}</td>
+                <td className={NUM_CELL}>{value(post.reposts)}</td>
                 <td className="py-3 px-2 align-top">
                   {post.trend ? (
                     <TrendMark trend={post.trend} />
@@ -102,9 +114,9 @@ export default function PostTable({ posts = [] }) {
       </div>
 
       <p className="mt-3 text-[10.5px] leading-relaxed text-muted-foreground">
-        Likes are upvotes on Reddit. Shares are reposts on X and crossposts on Reddit, where the platform reports
-        them. Views are only reported by X and YouTube. Trend compares each post’s engagement per day with the rest
-        of this run.
+        Likes are upvotes on Reddit. Shares are everything the platform reports as shared, so on X they are retweets
+        plus reposts. Retweets and reposts are only reported by X. Views are only reported by X and YouTube. Trend
+        compares each post’s engagement per day with the rest of this run.
       </p>
     </>
   );

@@ -61,7 +61,7 @@ export default function PublicResult({ research, posts }) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
           <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-            Every post with its likes, comments, views and score.
+            Every post links to its source, with likes, comments, views, shares, retweets and reposts.
           </p>
           <DownloadExcel research={research} posts={posts} />
         </div>
