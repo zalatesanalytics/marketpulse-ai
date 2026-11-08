@@ -21,7 +21,18 @@ export default function TrendingTopics({ topics = [] }) {
             </span>
             <div className="min-w-0">
               <div className="flex items-baseline justify-between gap-2">
-                <p className="truncate text-[13px]">{item.topic}</p>
+                <a
+                  href={`https://www.google.com/search?q=${encodeURIComponent(item.topic)}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={`Open pages about ${item.topic}`}
+                  className="group/link flex min-w-0 items-baseline gap-1 text-[13px] underline-offset-2 hover:text-primary hover:underline"
+                >
+                  <span className="truncate">{item.topic}</span>
+                  <span aria-hidden="true" className="shrink-0 font-mono text-[9px] text-muted-foreground group-hover/link:text-primary">
+                    ↗
+                  </span>
+                </a>
                 <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">
                   {item.mentions ? `${item.mentions} posts` : ""}
                 </span>
