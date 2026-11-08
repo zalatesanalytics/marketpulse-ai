@@ -1,0 +1,100 @@
+{
+  "name": "Research",
+  "type": "object",
+  "properties": {
+    "brand": {
+      "type": "string",
+      "description": "Brand or product being tracked"
+    },
+    "category": {
+      "type": "string",
+      "description": "Market category the brand competes in"
+    },
+    "competitors": {
+      "type": "string",
+      "description": "Comma separated competitor names"
+    },
+    "goal": {
+      "type": "string",
+      "description": "The decision this research supports"
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "reddit",
+          "x",
+          "youtube"
+        ]
+      },
+      "description": "Platforms scraped for this run"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "complete",
+        "failed"
+      ],
+      "enumColors": [
+        "yellow",
+        "green",
+        "red"
+      ],
+      "default": "running"
+    },
+    "summary": {
+      "type": "string",
+      "description": "What the conversation is saying overall"
+    },
+    "themes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "Suggested next move for the marketer"
+    },
+    "positive_count": {
+      "type": "number",
+      "default": 0
+    },
+    "neutral_count": {
+      "type": "number",
+      "default": 0
+    },
+    "negative_count": {
+      "type": "number",
+      "default": 0
+    },
+    "avg_sentiment": {
+      "type": "number",
+      "default": 0
+    },
+    "total_scraped": {
+      "type": "number",
+      "default": 0
+    },
+    "estimated_cost_usd": {
+      "type": "number",
+      "default": 0
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "brand",
+    "platforms",
+    "status"
+  ]
+}

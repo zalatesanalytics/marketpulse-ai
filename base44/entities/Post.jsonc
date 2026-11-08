@@ -1,0 +1,76 @@
+{
+  "name": "Post",
+  "type": "object",
+  "properties": {
+    "research_id": {
+      "type": "string",
+      "description": "The research run this post belongs to"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "reddit",
+        "x",
+        "youtube"
+      ]
+    },
+    "rank": {
+      "type": "number",
+      "description": "Position in the ranked top 20"
+    },
+    "title": {
+      "type": "string"
+    },
+    "excerpt": {
+      "type": "string",
+      "description": "Body or comment text from the post"
+    },
+    "author": {
+      "type": "string"
+    },
+    "community": {
+      "type": "string",
+      "description": "Subreddit, channel or handle"
+    },
+    "url": {
+      "type": "string"
+    },
+    "engagement": {
+      "type": "number",
+      "description": "Upvotes or likes"
+    },
+    "comments": {
+      "type": "number"
+    },
+    "views": {
+      "type": "number"
+    },
+    "published_at": {
+      "type": "string"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "neutral",
+        "negative"
+      ],
+      "enumColors": [
+        "green",
+        "gray",
+        "red"
+      ]
+    },
+    "sentiment_score": {
+      "type": "number"
+    },
+    "sentiment_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "research_id",
+    "platform",
+    "title"
+  ]
+}
