@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { listResearch } from "@/lib/server-fns";
 import SentimentSplit from "@/components/research/SentimentSplit";
 import SentimentBarChart from "@/components/research/SentimentBarChart";
+import SentimentTrendChart from "@/components/research/SentimentTrendChart";
 import { PLATFORM_LABEL, compact, formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authed/dashboard")({
@@ -91,6 +92,22 @@ function DashboardPage() {
             <p className="border-t border-border/60 pt-3 text-[10.5px] leading-relaxed text-muted-foreground">
               Every ranked post from your completed runs, grouped by the sentiment the desk scored it with: positive,
               neutral or negative.
+            </p>
+          </section>
+
+          <section className="mt-4 rounded-xl border border-border bg-card p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Sentiment over time
+              </h2>
+              <p className="font-mono text-[10px] text-muted-foreground">average score per run · −1 to +1</p>
+            </div>
+            <div className="mt-3">
+              <SentimentTrendChart runs={complete} />
+            </div>
+            <p className="mt-1 border-t border-border/60 pt-3 text-[10.5px] leading-relaxed text-muted-foreground">
+              Each line follows one brand across its runs, so a climb is improving sentiment and a dip is cooling.
+              Above the centre line the conversation is more positive than negative.
             </p>
           </section>
 
