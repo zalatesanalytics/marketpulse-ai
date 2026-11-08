@@ -1,4 +1,4 @@
-import { buildQuery, rankScore, scrapePlatform } from "@/lib/apify.server";
+import { buildQuery, collectScrape, rankScore, startScrape } from "@/lib/apify.server";
 
 const TOP_N = 20;
 const MAX_ITEMS = 20;
@@ -73,9 +73,9 @@ Then return:
 
 Be strict: praise that is really a complaint is negative.`;
 
-// Reads the live public conversation for one brand and ranks the top 20 posts.
-// Runs with a service-role client so it can score and log without a signed-in visitor.
-export async function runPublicAnalysis({ base44, messages }) {
+// Step 1: read the brand out of the chat and start the three scrapes without waiting
+// for them, so the request comes back in seconds.
+export async function startPublicAnalysis({ base44, messages }) {
   const transcript = messages
     .map((message) => `${message.role === "user" ? "Visitor" : "Desk"}: ${message.content}`)
     .join("\n");
@@ -96,26 +96,50 @@ export async function runPublicAnalysis({ base44, messages }) {
 
   const query = buildQuery(brief.brand, brief.competitors.join(", "));
   const settled = await Promise.allSettled(
-    PLATFORMS.map((platform) => scrapePlatform({ platform, query, maxItems: MAX_ITEMS, days: 90 }))
+    PLATFORMS.map((platform) => startScrape({ platform, query, maxItems: MAX_ITEMS, days: 90 }))
   );
 
+  const runs = [];
   const warnings = [];
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") runs.push(result.value);
+    else warnings.push(result.reason?.message || `${PLATFORMS[index]} could not be read.`);
+  });
+
+  if (!runs.length) return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
+
+  return { ok: true, stage: "scraping", brief, runs, warnings };
+}
+
+// Step 2: called until every started run has finished, then rank and score.
+export async function readPublicAnalysis({ base44, brief, runs }) {
+  const settled = await Promise.allSettled(runs.map((run) => collectScrape(run)));
+
+  const warnings = [];
+  const pending = [];
   const seen = new Set();
   const collected = [];
 
   settled.forEach((result, index) => {
-    if (result.status === "fulfilled") {
-      result.value.forEach((post) => {
-        const key = post.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60) || post.url;
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        collected.push(post);
-      });
-    } else {
-      warnings.push(result.reason?.message || `${PLATFORMS[index]} could not be read.`);
+    if (result.status !== "fulfilled") {
+      warnings.push(result.reason?.message || `${runs[index].platform} could not be read.`);
+      return;
     }
+    const out = result.value;
+    if (out.pending) {
+      pending.push(out.platform);
+      return;
+    }
+    if (out.failed) warnings.push(out.failed);
+    out.items.forEach((post) => {
+      const key = post.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60) || post.url;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      collected.push(post);
+    });
   });
 
+  if (pending.length) return { ok: true, stage: "scraping", pending };
   if (!collected.length) {
     return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
   }
@@ -217,14 +241,12 @@ export async function runPublicAnalysis({ base44, messages }) {
     created_date: new Date().toISOString(),
   };
 
-  await base44.entities.ClientFeedback
-    .create({
-      name: "Chat visitor",
-      topic: "question",
-      status: "new",
-      message: `Ran a live check on ${brief.brand} from the shared chat link.`,
-    })
-    .catch(() => {});
+  await base44.entities.ClientFeedback.create({
+    name: "Chat visitor",
+    topic: "question",
+    status: "new",
+    message: `Ran a live check on ${brief.brand} from the shared chat link.`,
+  }).catch(() => {});
 
   return { ok: true, research, posts };
 }

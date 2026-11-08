@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowUp, Loader2, Radar, RotateCw } from "lucide-react";
 import { chatWithDesk } from "@/lib/server-fns";
-import { runPublicCheck } from "@/lib/public-run";
+import { readPublicCheck, startPublicCheck } from "@/lib/public-run";
 import PublicResult from "@/components/feedback/PublicResult";
 
 const GREETING =
@@ -12,7 +12,8 @@ const SUGGESTIONS = ["Nike", "How does sentiment scoring work?", "Which platform
 
 export default function ClientChat() {
   const send = useServerFn(chatWithDesk);
-  const runCheck = useServerFn(runPublicCheck);
+  const startCheck = useServerFn(startPublicCheck);
+  const readCheck = useServerFn(readPublicCheck);
 
   const [messages, setMessages] = useState([{ role: "assistant", content: GREETING }]);
   const [draft, setDraft] = useState("");
@@ -26,13 +27,28 @@ export default function ClientChat() {
     endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, busy, result]);
 
+  // The crawl runs on the scrapers' side, so the page starts it, then polls until
+  // every platform has returned before showing the ranked read.
   const run = async (history) => {
     setRunning(true);
     setError("");
     try {
-      const data = await runCheck({ data: { messages: history.slice(-12) } });
-      if (data.ok) setResult(data);
-      else if (!data.needBrand) setError(data.error || "The read didn’t come back. Try again.");
+      const started = await startCheck({ data: { messages: history.slice(-12) } });
+      if (!started.ok) {
+        if (!started.needBrand) setError(started.error || "The read didn’t come back. Try again.");
+        return;
+      }
+
+      const deadline = Date.now() + 180000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const step = await readCheck({ data: { brief: started.brief, runs: started.runs } });
+        if (step.stage === "scraping") continue;
+        if (step.ok) setResult(step);
+        else setError(step.error || "The read didn’t come back. Try again.");
+        return;
+      }
+      setError("The read is taking longer than usual. Try again in a moment.");
     } catch {
       setError("The read didn’t come back. Try again in a moment.");
     } finally {

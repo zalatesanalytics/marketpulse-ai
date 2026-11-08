@@ -202,6 +202,56 @@ export async function scrapePlatform({ platform, query, maxItems, days = 30 }) {
   }
 }
 
+// Starts an actor run without waiting, so a visitor request never blocks on the scrape.
+export async function startScrape({ platform, query, maxItems, days = 90 }) {
+  const token = secrets.get("APIFY_TOKEN");
+  if (!token) throw new Error("Apify is not connected yet. Add your Apify API token to enable scraping.");
+
+  const response = await fetch(`https://api.apify.com/v2/acts/${ACTORS[platform]}/runs?timeout=100`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(buildInput(platform, query, maxItems, days)),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`${platform} scrape failed (${response.status}). ${detail.slice(0, 200)}`);
+  }
+
+  const payload = await response.json();
+  const run = payload?.data;
+  if (!run?.id) throw new Error(`${platform} could not be started.`);
+  return { platform, runId: run.id };
+}
+
+// Reads one started run: still going, failed, or its normalized items.
+export async function collectScrape({ platform, runId }) {
+  const token = secrets.get("APIFY_TOKEN");
+  if (!token) throw new Error("Apify is not connected yet. Add your Apify API token to enable scraping.");
+
+  const runResponse = await fetch(`https://api.apify.com/v2/actor-runs/${runId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!runResponse.ok) throw new Error(`${platform} run could not be read (${runResponse.status}).`);
+
+  const run = (await runResponse.json())?.data;
+  if (!run?.status) throw new Error(`${platform} run could not be read.`);
+  if (run.status === "READY" || run.status === "RUNNING") return { platform, pending: true };
+  if (run.status !== "SUCCEEDED") {
+    return { platform, pending: false, items: [], failed: `${platform} scrape ended ${String(run.status).toLowerCase()}.` };
+  }
+
+  const itemsResponse = await fetch(
+    `https://api.apify.com/v2/datasets/${run.defaultDatasetId}/items?format=json&clean=true`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!itemsResponse.ok) throw new Error(`${platform} results could not be read (${itemsResponse.status}).`);
+
+  const items = await itemsResponse.json();
+  if (!Array.isArray(items)) throw new Error(`${platform} returned an unexpected response.`);
+  return { platform, pending: false, items: items.map((item) => normalize(platform, item)).filter(Boolean) };
+}
+
 export function buildQuery(brand, competitors) {
   const names = [brand, ...String(competitors || "").split(",")]
     .map((n) => n.trim())
