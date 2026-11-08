@@ -6,6 +6,61 @@ const value = (n) => (n ? compact(n) : "—");
 
 const NUM_CELL = "py-3 px-2 text-right align-top font-mono text-[11px] tabular-nums";
 
+const METRICS = [
+  ["Likes", "engagement"],
+  ["Comments", "comments"],
+  ["Views", "views"],
+  ["Shares", "shares"],
+  ["Retweets", "retweets"],
+  ["Reposts", "reposts"],
+];
+
+function MobilePost({ post }) {
+  return (
+    <div className="rounded-lg border border-border/70 p-3">
+      <div className="flex items-center justify-between gap-2 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+        <span>{String(post.rank ?? 0).padStart(2, "0")}</span>
+        <span>{PLATFORM_LABEL[post.platform] || post.platform}</span>
+      </div>
+
+      {post.url ? (
+        <a
+          href={post.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-1.5 block text-[13px] leading-snug underline-offset-2 hover:text-primary hover:underline"
+        >
+          {post.title}
+        </a>
+      ) : (
+        <p className="mt-1.5 text-[13px] leading-snug">{post.title}</p>
+      )}
+
+      <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground">
+        {[post.community || post.author, formatDate(post.published_at)].filter(Boolean).join(" · ")}
+      </p>
+
+      <dl className="mt-2.5 grid grid-cols-3 gap-x-2 gap-y-2">
+        {METRICS.map(([label, key]) => (
+          <div key={key}>
+            <dt className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-muted-foreground">{label}</dt>
+            <dd className="font-mono text-[12px] tabular-nums">{value(post[key])}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+        <SentimentChip sentiment={post.sentiment} score={post.sentiment_score} />
+        {post.trend ? <TrendMark trend={post.trend} /> : null}
+      </div>
+
+      {post.sentiment_evidence && (
+        <p className="mt-1.5 text-[11px] italic leading-relaxed text-muted-foreground">“{post.sentiment_evidence}”</p>
+      )}
+    </div>
+  );
+}
+
 export default function PostTable({ posts = [] }) {
   if (!posts.length) {
     return (
@@ -17,11 +72,13 @@ export default function PostTable({ posts = [] }) {
 
   return (
     <>
-      <p className="mb-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground md:hidden">
-        Swipe for likes, comments, views, shares, retweets and reposts →
-      </p>
+      <div className="space-y-3 md:hidden">
+        {posts.map((post) => (
+          <MobilePost key={post.id} post={post} />
+        ))}
+      </div>
 
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[880px] border-collapse text-left">
           <thead>
             <tr className="border-b border-border font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">

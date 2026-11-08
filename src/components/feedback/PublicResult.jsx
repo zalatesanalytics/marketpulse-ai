@@ -21,7 +21,7 @@ export default function PublicResult({ research, posts }) {
         </span>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 p-3.5 md:p-4">
         {research.summary && (
           <p className="font-display text-[19px] leading-[1.35] tracking-[-0.005em]">{research.summary}</p>
         )}

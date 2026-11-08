@@ -17,7 +17,7 @@ export const Route = createFileRoute("/client-feedback")({
 
 function ClientFeedbackPage() {
   return (
-    <div className="min-h-screen bg-background px-5 py-8 md:py-14">
+    <div className="min-h-screen bg-background px-4 py-8 sm:px-5 md:py-14">
       <div className="mx-auto w-full max-w-[640px]">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-background">
