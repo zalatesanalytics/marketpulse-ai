@@ -3,7 +3,7 @@ import { secrets } from "base44:runtime";
 // Apify actors used for each platform. Swap an id here to change provider.
 const ACTORS = {
   reddit: "apify~reddit-scraper",
-  x: "apidojo~tweet-scraper",
+  x: "kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest",
   youtube: "streamers~youtube-scraper",
 };
 
