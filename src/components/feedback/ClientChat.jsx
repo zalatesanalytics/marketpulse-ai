@@ -5,11 +5,16 @@ import { chatWithDesk } from "@/lib/server-fns";
 import { readPublicCheck, startPublicCheck } from "@/lib/public-run";
 import PublicResult from "@/components/feedback/PublicResult";
 import SignInInvite from "@/components/feedback/SignInInvite";
+import { useAuth } from "@/lib/AuthContext";
 
 const GREETING =
   "Hi — I’m the Signal Desk assistant. Give me a product or brand name and I’ll bring back the top 20 posts from the past 90 days on Reddit, X and YouTube, ranked with comments, views, reactions, dates and sentiment.";
 
 const SUGGESTIONS = ["Nike", "How does sentiment scoring work?", "Which platforms should I start with?"];
+
+// One guest scan per visit: another brand needs an account, so the report is kept.
+const ASK_TO_SIGN_IN =
+  "That first report was on the house. Sign in — or create a free account — below and ask again: the next brand scans straight away, and your studies stay in your history.";
 
 export default function ClientChat() {
   const send = useServerFn(chatWithDesk);
@@ -23,6 +28,10 @@ export default function ClientChat() {
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
   const endRef = useRef(null);
+  const { isAuthenticated, isLoadingAuth } = useAuth();
+
+  // A signed-out visitor gets one read; anything after it asks them to sign in first.
+  const needsAccount = !!result && !isLoadingAuth && !isAuthenticated;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -57,14 +66,25 @@ export default function ClientChat() {
     }
   };
 
+  const askToSignIn = () => {
+    setError("");
+    setMessages((prev) => [...prev, { role: "assistant", content: ASK_TO_SIGN_IN }]);
+  };
+
   const post = async (text) => {
     const content = text.trim();
     if (!content || busy) return;
     const next = [...messages, { role: "user", content }];
     setMessages(next);
     setDraft("");
-    setBusy(true);
     setError("");
+
+    if (needsAccount) {
+      setMessages([...next, { role: "assistant", content: ASK_TO_SIGN_IN }]);
+      return;
+    }
+
+    setBusy(true);
 
     const read = !result && !running ? run(next) : null;
 
@@ -173,7 +193,7 @@ export default function ClientChat() {
         <div className="space-y-2">
           <div className="flex items-center justify-end">
             <button
-              onClick={() => run(messages)}
+              onClick={() => (needsAccount ? askToSignIn() : run(messages))}
               disabled={running}
               className="inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
             >
