@@ -13,7 +13,7 @@ const PUBLIC_MAX_ITEMS = 15;
 const PUBLIC_DAYS = 90;
 // If a platform is still crawling after this long, the read goes ahead with the
 // platforms that finished instead of holding everything for the slowest one.
-const GRACE_MS = 75000;
+const GRACE_MS = 80000;
 
 const BRIEF_SCHEMA = {
   type: "object",
