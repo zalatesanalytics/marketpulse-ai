@@ -2,13 +2,13 @@ import { secrets } from "base44:runtime";
 
 // Apify actors used for each platform. Swap an id here to change provider.
 const ACTORS = {
-  reddit: "trudax~reddit-scraper-lite",
+  reddit: "apify~reddit-scraper",
   x: "apidojo~tweet-scraper",
   youtube: "streamers~youtube-scraper",
 };
 
 // Published pay-per-result rates, used only for the pre-run cost estimate.
-export const RATE_PER_ITEM = { reddit: 0.0034, x: 0.0004, youtube: 0.0024 };
+export const RATE_PER_ITEM = { reddit: 0.0025, x: 0.0009, youtube: 0.0024 };
 
 const timeWindow = (days) => (days <= 1 ? "day" : days <= 7 ? "week" : days <= 31 ? "month" : "year");
 
@@ -28,20 +28,12 @@ const pickStr = (...values) => {
 function buildInput(platform, query, maxItems, days) {
   if (platform === "reddit") {
     return {
-      searches: [query],
-      searchPosts: true,
-      searchComments: false,
-      searchCommunities: false,
-      searchUsers: false,
-      sort: "top",
-      time: timeWindow(days),
-      maxItems,
-      maxPostCount: maxItems,
-      maxComments: 0,
-      includeMediaLinks: true,
-      skipComments: true,
-      includeNSFW: false,
-      ignoreStartUrls: true,
+      scrapeMode: "posts",
+      searchQueries: [query],
+      searchSort: "top",
+      searchTimeFilter: timeWindow(days),
+      maxSearchResultsPerQuery: maxItems,
+      includeNsfw: false,
     };
   }
   if (platform === "youtube") {
@@ -72,8 +64,14 @@ function normalize(platform, item) {
 
   const excerpt = platform === "x" ? "" : pickStr(item.body, item.text, item.description);
   const author =
-    pickStr(item.username, item.userName, item.channelName, item.author?.userName, item.author?.name) ||
-    pickStr(item.author);
+    pickStr(
+      item.authorName,
+      item.username,
+      item.author?.userName,
+      item.author?.username,
+      item.author?.name,
+      item.channelName
+    ) || pickStr(item.author);
 
   let url = pickStr(item.url, item.link, item.postUrl, item.videoUrl);
   if (!url && platform === "x" && item.id) url = `https://x.com/i/status/${item.id}`;
