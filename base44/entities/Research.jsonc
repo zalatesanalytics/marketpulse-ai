@@ -44,6 +44,26 @@
       ],
       "default": "running"
     },
+    "scraper_runs": {
+      "type": "array",
+      "description": "Scraper runs in flight for this record, cleared once the posts are saved",
+      "items": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "reddit",
+              "x",
+              "youtube"
+            ]
+          },
+          "run_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "summary": {
       "type": "string",
       "description": "What the conversation is saying overall"

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, RotateCcw } from "lucide-react";
-import { getResearch, runResearch } from "@/lib/server-fns";
+import { finishResearch, getResearch, runResearch } from "@/lib/server-fns";
 import RunProgress from "@/components/research/RunProgress";
 import ResearchResults from "@/components/research/ResearchResults";
 import { PLATFORM_LABEL, formatDate } from "@/lib/format";
@@ -23,21 +23,41 @@ function ResearchPage() {
   const { research, posts } = Route.useLoaderData();
   const router = useRouter();
   const run = useServerFn(runResearch);
+  const finish = useServerFn(finishResearch);
   const started = useRef(null);
+
+  // Starts the Reddit, X and YouTube scrapers, then checks back until the run has
+  // finished and the posts are saved, so no request has to hold the whole crawl.
+  const drive = async () => {
+    const id = research.id;
+    started.current = id;
+    try {
+      await run({ data: { research_id: id } });
+    } catch {
+      router.invalidate();
+      return;
+    }
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      let step = null;
+      try {
+        step = await finish({ data: { research_id: id } });
+      } catch {
+        break;
+      }
+      if (!step || step.stage !== "scraping") break;
+    }
+    router.invalidate();
+  };
 
   useEffect(() => {
     if (research.status !== "running" || started.current === research.id) return;
-    started.current = research.id;
-    run({ data: { research_id: research.id } })
-      .catch(() => null)
-      .finally(() => router.invalidate());
-  }, [research.id, research.status, run, router]);
+    drive();
+  }, [research.id, research.status]);
 
   const retry = () => {
-    started.current = research.id;
-    run({ data: { research_id: research.id } })
-      .catch(() => null)
-      .finally(() => router.invalidate());
+    started.current = null;
+    drive();
   };
 
   return (

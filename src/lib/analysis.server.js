@@ -1,8 +1,9 @@
 import { buildQuery, collectScrape, rankScore, startScrape } from "@/lib/apify.server";
 
 const TOP_N = 20;
-const MAX_ITEMS = 20;
 const PLATFORMS = ["reddit", "x", "youtube"];
+const PUBLIC_MAX_ITEMS = 20;
+const PUBLIC_DAYS = 90;
 
 const BRIEF_SCHEMA = {
   type: "object",
@@ -32,6 +33,7 @@ const SCORE_SCHEMA = {
       },
     },
     summary: { type: "string" },
+    themes: { type: "array", items: { type: "string" } },
     trending_topics: {
       type: "array",
       items: {
@@ -73,46 +75,32 @@ Then return:
 
 Be strict: praise that is really a complaint is negative.`;
 
-// Step 1: read the brand out of the chat and start the three scrapes without waiting
-// for them, so the request comes back in seconds.
-export async function startPublicAnalysis({ base44, messages }) {
-  const transcript = messages
-    .map((message) => `${message.role === "user" ? "Visitor" : "Desk"}: ${message.content}`)
-    .join("\n");
-
-  const extracted = await base44.integrations.Core.InvokeLLM({
-    prompt: extractPrompt(transcript),
-    response_json_schema: BRIEF_SCHEMA,
-    model: "gemini_3_flash",
-  });
-
-  const brief = {
-    brand: String(extracted?.brand || "").trim().slice(0, 80),
-    category: String(extracted?.category || "").trim().slice(0, 120),
-    competitors: (extracted?.competitors || []).slice(0, 3).map((name) => String(name).slice(0, 60)),
-    goal: String(extracted?.goal || "").trim().slice(0, 300),
-  };
-  if (!brief.brand) return { ok: false, needBrand: true };
-
+// Starts the platform scrapers without waiting for them, so no request has to hold
+// the whole crawl. Returns the run handles to poll.
+export async function startScrapes({
+  brief,
+  platforms = PLATFORMS,
+  maxItems = PUBLIC_MAX_ITEMS,
+  days = PUBLIC_DAYS,
+}) {
   const query = buildQuery(brief.brand, brief.competitors.join(", "));
   const settled = await Promise.allSettled(
-    PLATFORMS.map((platform) => startScrape({ platform, query, maxItems: MAX_ITEMS, days: 90 }))
+    platforms.map((platform) => startScrape({ platform, query, maxItems, days }))
   );
 
   const runs = [];
   const warnings = [];
   settled.forEach((result, index) => {
     if (result.status === "fulfilled") runs.push(result.value);
-    else warnings.push(result.reason?.message || `${PLATFORMS[index]} could not be read.`);
+    else warnings.push(result.reason?.message || `${platforms[index]} could not be read.`);
   });
 
-  if (!runs.length) return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
-
-  return { ok: true, stage: "scraping", brief, runs, warnings };
+  return { runs, warnings };
 }
 
-// Step 2: called until every started run has finished, then rank and score.
-export async function readPublicAnalysis({ base44, brief, runs }) {
+// Reads every started run. While any is still crawling it returns { pending: true };
+// once they are all in it ranks the top 20 and scores them.
+export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS }) {
   const settled = await Promise.allSettled(runs.map((run) => collectScrape(run)));
 
   const warnings = [];
@@ -139,13 +127,13 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
     });
   });
 
-  if (pending.length) return { ok: true, stage: "scraping", pending };
+  if (pending.length) return { ok: true, pending: true, pendingPlatforms: pending };
   if (!collected.length) {
     return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
   }
 
-  // Reddit and YouTube only offer day/week/month/year windows, so keep the last 90 days here.
-  const cutoff = Date.now() - 90 * 86400000;
+  // Reddit and YouTube only offer day/week/month/year windows, so keep the window here.
+  const cutoff = Date.now() - days * 86400000;
   const recent = collected.filter((post) => {
     const time = Date.parse(post.published_at || "");
     return Number.isNaN(time) || time >= cutoff;
@@ -199,6 +187,7 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
       rank: index + 1,
       platform: post.platform,
       title: post.title,
+      excerpt: post.excerpt,
       author: post.author,
       community: post.community,
       url: post.url,
@@ -206,6 +195,7 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
       comments: post.comments,
       views: post.views,
       published_at: post.published_at,
+      trend: post.trend || "steady",
       sentiment: row?.sentiment || "neutral",
       sentiment_score: typeof row?.score === "number" ? Number(row.score.toFixed(2)) : 0,
       sentiment_reason: row?.reason || "Not scored",
@@ -218,13 +208,13 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
   );
   const avg = posts.reduce((sum, post) => sum + post.sentiment_score, 0) / posts.length;
 
-  const research = {
-    id: `public-${Date.now()}`,
-    brand: brief.brand,
-    category: brief.category,
-    competitors: brief.competitors.join(", "),
-    goal: brief.goal,
-    platforms: PLATFORMS,
+  return {
+    ok: true,
+    pending: false,
+    posts,
+    counts,
+    avg,
+    themes: analysis?.themes || [],
     summary: analysis?.summary || "",
     recommendation: analysis?.recommendation || "",
     trending_topics: (analysis?.trending_topics || []).slice(0, 10).map((topic) => ({
@@ -232,14 +222,74 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
       mentions: Math.min(Number(topic.mentions) || 0, posts.length),
       sentiment: ["positive", "neutral", "negative"].includes(topic.sentiment) ? topic.sentiment : "neutral",
     })),
-    positive_count: counts.positive,
-    neutral_count: counts.neutral,
-    negative_count: counts.negative,
-    avg_sentiment: Number(avg.toFixed(2)),
-    total_scraped: pool.length,
+    totalScraped: pool.length,
     warnings,
-    created_date: new Date().toISOString(),
   };
+}
+
+// Step 1 of the public check: read the brand out of the chat and start the scrapes.
+export async function startPublicAnalysis({ base44, messages }) {
+  const transcript = messages
+    .map((message) => `${message.role === "user" ? "Visitor" : "Desk"}: ${message.content}`)
+    .join("\n");
+
+  const extracted = await base44.integrations.Core.InvokeLLM({
+    prompt: extractPrompt(transcript),
+    response_json_schema: BRIEF_SCHEMA,
+    model: "gemini_3_flash",
+  });
+
+  const brief = {
+    brand: String(extracted?.brand || "").trim().slice(0, 80),
+    category: String(extracted?.category || "").trim().slice(0, 120),
+    competitors: (extracted?.competitors || []).slice(0, 3).map((name) => String(name).slice(0, 60)),
+    goal: String(extracted?.goal || "").trim().slice(0, 300),
+  };
+  if (!brief.brand) return { ok: false, needBrand: true };
+
+  const { runs, warnings } = await startScrapes({
+    brief,
+    platforms: PLATFORMS,
+    maxItems: PUBLIC_MAX_ITEMS,
+    days: PUBLIC_DAYS,
+  });
+
+  if (!runs.length) return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
+
+  return { ok: true, stage: "scraping", brief, runs, warnings };
+}
+
+// Step 2: called until every started run has finished, then ranked, scored and saved
+// as a Research record with its Post rows.
+export async function readPublicAnalysis({ base44, brief, runs }) {
+  const step = await collectAndScore({ base44, brief, runs, days: PUBLIC_DAYS });
+  if (step.pending) return { ok: true, stage: "scraping", pending: step.pendingPlatforms };
+  if (!step.ok) return { ok: false, error: step.error };
+
+  const research = await base44.entities.Research.create({
+    brand: brief.brand,
+    category: brief.category,
+    competitors: brief.competitors.join(", "),
+    goal: brief.goal,
+    platforms: PLATFORMS,
+    status: "complete",
+    summary: step.summary,
+    themes: step.themes,
+    trending_topics: step.trending_topics,
+    recommendation: step.recommendation,
+    positive_count: step.counts.positive,
+    neutral_count: step.counts.neutral,
+    negative_count: step.counts.negative,
+    avg_sentiment: Number(step.avg.toFixed(2)),
+    total_scraped: step.totalScraped,
+    warnings: step.warnings,
+  });
+
+  if (step.posts.length) {
+    await base44.entities.Post.bulkCreate(
+      step.posts.map((post) => ({ ...post, research_id: research.id }))
+    );
+  }
 
   await base44.entities.ClientFeedback.create({
     name: "Chat visitor",
@@ -248,5 +298,5 @@ export async function readPublicAnalysis({ base44, brief, runs }) {
     message: `Ran a live check on ${brief.brand} from the shared chat link.`,
   }).catch(() => {});
 
-  return { ok: true, research, posts };
+  return { ok: true, research, posts: step.posts };
 }
