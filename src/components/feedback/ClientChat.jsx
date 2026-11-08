@@ -4,6 +4,7 @@ import { ArrowUp, Loader2, Radar, RotateCw } from "lucide-react";
 import { chatWithDesk } from "@/lib/server-fns";
 import { readPublicCheck, startPublicCheck } from "@/lib/public-run";
 import PublicResult from "@/components/feedback/PublicResult";
+import SignInInvite from "@/components/feedback/SignInInvite";
 
 const GREETING =
   "Hi — I’m the Signal Desk assistant. Give me a product or brand name and I’ll bring back the top 20 posts from the past 90 days on Reddit, X and YouTube, ranked with comments, views, reactions, dates and sentiment.";
@@ -181,6 +182,7 @@ export default function ClientChat() {
             </button>
           </div>
           <PublicResult research={result.research} posts={result.posts} />
+          <SignInInvite />
         </div>
       )}
     </div>
