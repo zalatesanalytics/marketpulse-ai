@@ -37,7 +37,7 @@
     },
     "engagement": {
       "type": "number",
-      "description": "Upvotes or likes"
+      "description": "Likes or upvotes"
     },
     "comments": {
       "type": "number"
@@ -46,7 +46,22 @@
       "type": "number"
     },
     "published_at": {
-      "type": "string"
+      "type": "string",
+      "description": "ISO timestamp of the original post"
+    },
+    "trend": {
+      "type": "string",
+      "enum": [
+        "rising",
+        "steady",
+        "cooling"
+      ],
+      "enumColors": [
+        "green",
+        "gray",
+        "red"
+      ],
+      "description": "Engagement velocity compared with the rest of the run"
     },
     "sentiment": {
       "type": "string",

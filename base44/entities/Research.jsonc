@@ -54,6 +54,30 @@
         "type": "string"
       }
     },
+    "trending_topics": {
+      "type": "array",
+      "description": "Top 10 topics driving the conversation, ranked by volume",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "mentions": {
+            "type": "number",
+            "description": "Posts in the run that discuss this topic"
+          },
+          "sentiment": {
+            "type": "string",
+            "enum": [
+              "positive",
+              "neutral",
+              "negative"
+            ]
+          }
+        }
+      }
+    },
     "recommendation": {
       "type": "string",
       "description": "Suggested next move for the marketer"

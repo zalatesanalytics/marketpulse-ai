@@ -1,7 +1,12 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
 import PostTable from "@/components/research/PostTable";
+import TrendingTopics from "@/components/research/TrendingTopics";
 
 export default function ResearchResults({ research, posts }) {
+  const topics = research.trending_topics?.length
+    ? research.trending_topics
+    : (research.themes || []).map((topic) => ({ topic }));
+
   return (
     <div className="space-y-6">
       {!!research.warnings?.length && (
@@ -47,22 +52,6 @@ export default function ResearchResults({ research, posts }) {
             </div>
           </div>
 
-          {!!research.themes?.length && (
-            <div>
-              <h2 className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Themes</h2>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {research.themes.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-border bg-secondary/60 px-2.5 py-1 text-[11.5px] text-foreground/80"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center justify-between border-t border-border pt-3.5 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
             <span>{research.total_scraped} posts read</span>
             <span>top {posts.length} ranked</span>
@@ -70,8 +59,10 @@ export default function ResearchResults({ research, posts }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <TrendingTopics topics={topics} />
+
+      <section className="rounded-xl border border-border bg-card p-5 md:p-6">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[13px] font-medium">Top {posts.length} posts, ranked</h2>
           <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground">
             by engagement

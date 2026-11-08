@@ -9,6 +9,32 @@ const TOP_N = 20;
 const perPlatform = (count) => (count <= 1 ? 20 : count === 2 ? 16 : 12);
 const PLATFORM_ENUM = z.enum(["reddit", "x", "youtube"]);
 
+const median = (values) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+// Trend compares a post's engagement per day against the rest of the run.
+const assignTrend = (posts) => {
+  const now = Date.now();
+  const velocities = posts.map((post) => {
+    const time = Date.parse(post.published_at || "");
+    if (Number.isNaN(time)) return null;
+    const ageDays = Math.max((now - time) / 86400000, 0.5);
+    return rankScore(post) / ageDays;
+  });
+  const baseline = median(velocities.filter((v) => v !== null)) || 0;
+
+  return posts.map((post, i) => {
+    const velocity = velocities[i];
+    if (velocity === null || !baseline) return { ...post, trend: "steady" };
+    const ratio = velocity / baseline;
+    return { ...post, trend: ratio >= 1.5 ? "rising" : ratio <= 0.6 ? "cooling" : "steady" };
+  });
+};
+
 /* ---------------------------------------------------------------- reads */
 
 export const listResearch = createServerFn({ method: "GET" })
@@ -89,7 +115,7 @@ For every numbered post return:
 
 Then return:
 - summary: 2-3 sentences on what the conversation as a whole says
-- themes: 3 to 5 recurring themes, max 6 words each
+- trending_topics: exactly the top 10 topics driving the conversation, ordered from most to least discussed. For each: topic (2 to 5 words, specific to ${research.brand} and its category, never generic like "discussion"), mentions (count of the listed posts that genuinely touch it, never more than the number of posts listed and never a like or comment count), sentiment (dominant tone of that topic)
 - recommendation: 2-3 sentences of concrete next actions, tied to the client's decision
 
 Be strict: praise that is really a complaint ("great, another delay") is negative.`;
@@ -112,9 +138,21 @@ const RESPONSE_SCHEMA = {
     },
     summary: { type: "string" },
     themes: { type: "array", items: { type: "string" } },
+    trending_topics: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          topic: { type: "string" },
+          mentions: { type: "integer" },
+          sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
+        },
+        required: ["topic", "mentions", "sentiment"],
+      },
+    },
     recommendation: { type: "string" },
   },
-  required: ["posts", "summary", "themes", "recommendation"],
+  required: ["posts", "summary", "themes", "trending_topics", "recommendation"],
 };
 
 export const runResearch = createServerFn({ method: "POST" })
@@ -152,8 +190,9 @@ export const runResearch = createServerFn({ method: "POST" })
       const platform = platforms[i];
       if (result.status === "fulfilled") {
         result.value.forEach((post) => {
-          const key = post.url || `${post.platform}:${post.title}`;
-          if (seen.has(key)) return;
+          const titleKey = post.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
+          const key = titleKey || post.url;
+          if (!key || seen.has(key)) return;
           seen.add(key);
           collected.push(post);
         });
@@ -172,7 +211,7 @@ export const runResearch = createServerFn({ method: "POST" })
       return { ok: false, error: warnings[0] || "No public posts were found for that query." };
     }
 
-    const top = collected.sort((a, b) => rankScore(b) - rankScore(a)).slice(0, TOP_N);
+    const top = assignTrend(collected.sort((a, b) => rankScore(b) - rankScore(a)).slice(0, TOP_N));
 
     let analysis = null;
     try {
@@ -214,6 +253,7 @@ export const runResearch = createServerFn({ method: "POST" })
         comments: post.comments,
         views: post.views,
         published_at: post.published_at,
+        trend: post.trend,
         sentiment: row?.sentiment || "neutral",
         sentiment_score: typeof row?.score === "number" ? Number(row.score.toFixed(2)) : 0,
         sentiment_reason: row?.reason || "Not scored",
@@ -234,6 +274,11 @@ export const runResearch = createServerFn({ method: "POST" })
       status: "complete",
       summary: analysis?.summary || "",
       themes: analysis?.themes || [],
+      trending_topics: (analysis?.trending_topics || []).slice(0, 10).map((topic) => ({
+        topic: String(topic.topic || "").slice(0, 90),
+        mentions: Math.min(Number(topic.mentions) || 0, top.length),
+        sentiment: ["positive", "neutral", "negative"].includes(topic.sentiment) ? topic.sentiment : "neutral",
+      })),
       recommendation: analysis?.recommendation || "",
       positive_count: counts.positive,
       neutral_count: counts.neutral,

@@ -66,6 +66,14 @@ function ResearchPage() {
               est. ${Number(research.estimated_cost_usd).toFixed(3)} scrape cost
             </p>
           )}
+          {research.status === "complete" && (
+            <button
+              onClick={retry}
+              className="mt-2 inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3" /> Re-run
+            </button>
+          )}
         </div>
       </header>
 

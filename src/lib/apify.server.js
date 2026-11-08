@@ -20,9 +20,67 @@ const pickNum = (...values) => {
   return 0;
 };
 
+const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&#x27;": "'", "&nbsp;": " " };
+
+// Strips markup, decodes entities, drops tracking links and collapses whitespace.
+const clean = (value) =>
+  String(value ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, (match) => ENTITIES[match.toLowerCase()] ?? " ")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const pickStr = (...values) => {
-  for (const v of values) if (typeof v === "string" && v.trim()) return v.trim();
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return clean(v);
+  }
   return "";
+};
+
+// Normalizes epoch seconds, epoch millis and date strings to one ISO timestamp.
+function toIso(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const epoch = typeof value === "number" ? value : /^\d{10,13}$/.test(String(value)) ? Number(value) : null;
+  if (epoch) {
+    const date = new Date(epoch < 1e12 ? epoch * 1000 : epoch);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+const fieldAt = (item, path) =>
+  path.split(".").reduce((value, key) => (value && typeof value === "object" ? value[key] : undefined), item);
+
+// Counts live under different keys on each platform; read the right ones first.
+const FIELDS = {
+  reddit: {
+    likes: ["upVotes", "upvoteCount", "score"],
+    comments: ["numberOfComments", "commentsCount", "commentCount"],
+    views: ["viewCount", "views"],
+    community: ["communityName", "subreddit"],
+  },
+  x: {
+    likes: ["likeCount", "likes"],
+    comments: ["replyCount", "replyCounts", "commentCount"],
+    views: ["viewCount", "viewsCount"],
+    community: ["author.userName", "username", "authorName"],
+  },
+  youtube: {
+    likes: ["likes", "likeCount"],
+    comments: ["commentsCount", "commentCount"],
+    views: ["viewCount", "views"],
+    community: ["channelName", "channel.name"],
+  },
+};
+
+const pickField = (item, paths = []) => {
+  for (const path of paths) {
+    const num = pickNum(fieldAt(item, path));
+    if (num) return num;
+  }
+  return 0;
 };
 
 function buildInput(platform, query, maxItems, days) {
@@ -50,9 +108,7 @@ function buildInput(platform, query, maxItems, days) {
 
 function publishedAt(item) {
   const explicit = pickStr(item.createdAt, item.date, item.publishedAt, item.uploadDate, item.created);
-  if (explicit) return explicit;
-  const epoch = pickNum(item.created_utc, item.createdUtc, item.timestamp);
-  return epoch ? new Date(epoch * 1000).toISOString() : "";
+  return toIso(explicit || pickNum(item.created_utc, item.createdUtc, item.timestamp));
 }
 
 function normalize(platform, item) {
@@ -76,16 +132,27 @@ function normalize(platform, item) {
   let url = pickStr(item.url, item.link, item.postUrl, item.videoUrl);
   if (!url && platform === "x" && item.id) url = `https://x.com/i/status/${item.id}`;
 
+  const fields = FIELDS[platform] || {};
+  const community = pickStr(
+    ...(fields.community || []).map((path) => fieldAt(item, path)),
+    item.communityName,
+    item.subreddit,
+    item.channelName,
+    item.channel?.name
+  );
+
   return {
     platform,
     title: title.slice(0, 300),
     excerpt: excerpt.slice(0, 1200),
-    author,
-    community: pickStr(item.communityName, item.subreddit, item.channelName, item.channel?.name, ""),
+    author: author.slice(0, 80),
+    community: community.slice(0, 80),
     url,
-    engagement: pickNum(item.upVotes, item.upvoteCount, item.likeCount, item.likes, item.score),
-    comments: pickNum(item.numberOfComments, item.commentCount, item.commentsCount, item.replyCount),
-    views: pickNum(item.viewCount, item.views),
+    engagement: pickField(item, fields.likes) || pickNum(item.upVotes, item.upvoteCount, item.likeCount, item.likes, item.score),
+    comments:
+      pickField(item, fields.comments) ||
+      pickNum(item.numberOfComments, item.commentCount, item.commentsCount, item.replyCount),
+    views: pickField(item, fields.views) || pickNum(item.viewCount, item.views),
     published_at: publishedAt(item),
   };
 }
