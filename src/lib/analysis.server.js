@@ -28,8 +28,10 @@ const SCORE_SCHEMA = {
           sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
           score: { type: "number" },
           reason: { type: "string" },
+          evidence: { type: "string" },
+          offTopic: { type: "boolean" },
         },
-        required: ["index", "sentiment", "score", "reason"],
+        required: ["index", "sentiment", "score", "reason", "evidence", "offTopic"],
       },
     },
     summary: { type: "string" },
@@ -67,13 +69,49 @@ const scorePrompt = (brief) => `You are a senior social listening analyst. Score
 ${brief.competitors?.length ? `Competitors in view: ${brief.competitors.join(", ")}.` : ""}
 ${brief.goal ? `The client needs this to decide: "${brief.goal}"` : ""}
 
-For every numbered post return sentiment (positive | neutral | negative, judged toward ${brief.brand}), score between -1 (hostile) and 1 (advocating), and reason (max 12 words, grounded only in the post text).
+For every numbered post return sentiment (positive | neutral | negative, judged toward ${brief.brand}), score between -1 (hostile) and 1 (advocating), reason (max 12 words, grounded only in the post text), and evidence: a fragment of at most 15 words copied word for word from that post which justifies the call.
+Return exactly one row per numbered post, using its number as index. A positive label must carry a score above 0, a negative label below 0. If a post says too little to judge, use neutral with score 0 and say so in reason. Never invent, merge or reorder posts, and never quote text that is not in the post.
+Set offTopic to true when the post is not actually about ${brief.brand} — another company, a game or film with a similar name, or a coincidental word match — and leave its sentiment neutral with score 0 in that case.
 Then return:
 - summary: 2-3 sentences on what the conversation as a whole says
 - trending_topics: the top 10 topics driving the conversation, most discussed first. Each: topic (2 to 5 words, specific to ${brief.brand}), mentions (listed posts that touch it, never a like or comment count), sentiment
 - recommendation: 2-3 sentences of concrete next actions
 
+Ground the summary, the topics and the recommendation only in the numbered posts above: never state a statistic, a theme or a post that is not listed.
 Be strict: praise that is really a complaint is negative.`;
+
+const SENTIMENTS = ["positive", "neutral", "negative"];
+
+// Engagement per day since publication, so a week-old post and a year-old one are not
+// compared on raw counts alone.
+function velocityOf(post) {
+  const time = Date.parse(post.published_at || "");
+  if (Number.isNaN(time)) return 0;
+  const days = Math.max((Date.now() - time) / 86400000, 1);
+  return (Number(post.engagement) + Number(post.comments) * 2) / days;
+}
+
+function medianOf(values) {
+  const sorted = values.filter((value) => value > 0).sort((a, b) => a - b);
+  return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+}
+
+function trendOf(post, median) {
+  const velocity = velocityOf(post);
+  if (!velocity || !median) return "steady";
+  if (velocity >= median * 1.5) return "rising";
+  if (velocity <= median * 0.6) return "cooling";
+  return "steady";
+}
+
+// The label and the number have to agree, and both stay inside -1..1.
+function clampScore(score, sentiment) {
+  const n = Number(score);
+  const bounded = Number.isFinite(n) ? Math.max(-1, Math.min(1, n)) : 0;
+  if (sentiment === "positive") return Number(Math.max(bounded, 0.2).toFixed(2));
+  if (sentiment === "negative") return Number(Math.min(bounded, -0.2).toFixed(2));
+  return Number(Math.max(-0.1, Math.min(0.1, bounded)).toFixed(2));
+}
 
 // Starts the platform scrapers without waiting for them, so no request has to hold
 // the whole crawl. Returns the run handles to poll.
@@ -156,33 +194,71 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
   });
   const top = selected.slice(0, TOP_N).sort((a, b) => rankScore(b) - rankScore(a));
 
-  let analysis = null;
-  try {
-    const listing = top
-      .map((post, index) => {
+  const marked = top;
+
+  const listing = (indices) =>
+    indices
+      .map((index) => {
+        const post = marked[index];
         const body = (post.excerpt || "").replace(/\s+/g, " ").slice(0, 280);
-        return `[${index + 1}] (${post.platform}, ${post.engagement} upvotes/likes) ${post.title}${
+        return `[${index + 1}] (${post.platform}, ${post.community || post.author}, ${post.engagement} likes/upvotes, ${post.comments} comments) ${post.title}${
           body ? ` — ${body}` : ""
         }`;
       })
       .join("\n");
 
-    analysis = await base44.integrations.Core.InvokeLLM({
-      prompt: `${scorePrompt(brief)}\n\nPOSTS:\n${listing}`,
+  const askScore = (indices) =>
+    base44.integrations.Core.InvokeLLM({
+      prompt: `${scorePrompt(brief)}\n\nPOSTS:\n${listing(indices)}`,
       response_json_schema: SCORE_SCHEMA,
       model: "gemini_3_flash",
     });
+
+  const allIndices = marked.map((_, index) => index);
+  const rows = new Map();
+  let analysis = null;
+
+  try {
+    analysis = await askScore(allIndices);
+    (analysis?.posts || []).forEach((row) => {
+      const index = row.index - 1;
+      if (Number.isInteger(row.index) && allIndices.includes(index)) rows.set(index, row);
+    });
+
+    // A second pass for whatever the model skipped, so one weak row does not become
+    // an unscored post in the table.
+    const missing = allIndices.filter((index) => !rows.has(index));
+    if (missing.length) {
+      const retry = await askScore(missing);
+      (retry?.posts || []).forEach((row) => {
+        const index = row.index - 1;
+        if (missing.includes(index) && !rows.has(index)) rows.set(index, row);
+      });
+    }
   } catch {
-    warnings.push("Score failed, so every post is shown as neutral.");
+    warnings.push("Scoring failed, so no post carries a sentiment label.");
   }
 
-  const scored = new Map();
-  (analysis?.posts || []).forEach((row) => {
-    if (Number.isInteger(row.index)) scored.set(row.index - 1, row);
-  });
+  const unscored = allIndices.filter((index) => !rows.has(index)).length;
+  if (unscored) warnings.push(`${unscored} of ${marked.length} posts could not be scored and are shown as neutral.`);
 
-  const posts = top.map((post, index) => {
-    const row = scored.get(index);
+  // A brand name can match something else entirely (Nike pulls the game NIKKE), so
+  // anything the scorer calls off-topic is dropped instead of counted as neutral coverage.
+  const kept = marked
+    .map((post, index) => ({ post, row: rows.get(index) }))
+    .filter(({ row }) => !row?.offTopic);
+  const dropped = marked.length - kept.length;
+  if (dropped) {
+    warnings.push(
+      `${dropped} post${dropped === 1 ? "" : "s"} matched the name but ${dropped === 1 ? "was" : "were"} about something else, so ${dropped === 1 ? "it was" : "they were"} left out of the report.`
+    );
+  }
+
+  // Trend is measured against the posts actually reported, not the raw pull.
+  const medianVelocity = medianOf(kept.map(({ post }) => velocityOf(post)));
+
+  const posts = kept.map(({ post, row }, index) => {
+    const sentiment = SENTIMENTS.includes(row?.sentiment) ? row.sentiment : "neutral";
     return {
       rank: index + 1,
       platform: post.platform,
@@ -198,12 +274,17 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
       retweets: post.retweets || 0,
       reposts: post.reposts || 0,
       published_at: post.published_at,
-      trend: post.trend || "steady",
-      sentiment: row?.sentiment || "neutral",
-      sentiment_score: typeof row?.score === "number" ? Number(row.score.toFixed(2)) : 0,
-      sentiment_reason: row?.reason || "Not scored",
+      trend: trendOf(post, medianVelocity),
+      sentiment,
+      sentiment_score: row ? clampScore(row.score, sentiment) : 0,
+      sentiment_reason: row?.reason ? String(row.reason).slice(0, 160) : "Not scored",
+      sentiment_evidence: row?.evidence ? String(row.evidence).slice(0, 240) : "",
     };
   });
+
+  if (!posts.length) {
+    return { ok: false, error: `Nothing in the pull was actually about ${brief.brand}.` };
+  }
 
   const counts = posts.reduce(
     (acc, post) => ({ ...acc, [post.sentiment]: acc[post.sentiment] + 1 }),

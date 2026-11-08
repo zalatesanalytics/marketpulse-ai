@@ -87,13 +87,20 @@
         "green",
         "gray",
         "red"
-      ]
+      ],
+      "description": "Classification of the post toward the brand"
     },
     "sentiment_score": {
-      "type": "number"
+      "type": "number",
+      "description": "Sentiment score from -1 (hostile) to 1 (advocating)"
     },
     "sentiment_reason": {
-      "type": "string"
+      "type": "string",
+      "description": "Why the post was scored this way"
+    },
+    "sentiment_evidence": {
+      "type": "string",
+      "description": "Word-for-word fragment of the post that justifies the score"
     }
   },
   "required": [

@@ -42,8 +42,10 @@ export default function PostTable({ posts = [] }) {
               <th className="py-2 px-2 text-right font-normal" title="Quote posts on X">
                 Reposts
               </th>
-              <th className="py-2 px-2 font-normal">Trend</th>
-              <th className="py-2 pl-2 font-normal">Sentiment</th>
+              <th className="py-2 px-2 font-normal" title="Classification and score, from -1 hostile to +1 advocating">
+                Sentiment
+              </th>
+              <th className="py-2 pl-2 font-normal">Trend</th>
             </tr>
           </thead>
           <tbody>
@@ -81,9 +83,9 @@ export default function PostTable({ posts = [] }) {
                       Open post ↗
                     </a>
                   )}
-                  {post.sentiment_reason && post.sentiment_reason !== "Not scored" && (
-                    <p className="mt-1 line-clamp-1 text-[11px] italic text-muted-foreground">
-                      “{post.sentiment_reason}”
+                  {post.sentiment_evidence && (
+                    <p className="mt-1 line-clamp-2 text-[11px] italic text-muted-foreground">
+                      “{post.sentiment_evidence}”
                     </p>
                   )}
                 </td>
@@ -93,19 +95,19 @@ export default function PostTable({ posts = [] }) {
                 <td className={NUM_CELL}>{value(post.shares)}</td>
                 <td className={NUM_CELL}>{value(post.retweets)}</td>
                 <td className={NUM_CELL}>{value(post.reposts)}</td>
-                <td className="py-3 px-2 align-top">
-                  {post.trend ? (
-                    <TrendMark trend={post.trend} />
-                  ) : (
-                    <span className="font-mono text-[10.5px] text-muted-foreground/70">—</span>
-                  )}
-                </td>
-                <td className="py-3 pl-2 align-top">
+                <td className="py-3 px-2 align-top" title={post.sentiment_reason || undefined}>
                   <SentimentChip
                     sentiment={post.sentiment}
                     score={post.sentiment_score}
                     className="whitespace-nowrap"
                   />
+                </td>
+                <td className="py-3 pl-2 align-top">
+                  {post.trend ? (
+                    <TrendMark trend={post.trend} />
+                  ) : (
+                    <span className="font-mono text-[10.5px] text-muted-foreground/70">—</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -115,8 +117,9 @@ export default function PostTable({ posts = [] }) {
 
       <p className="mt-3 text-[10.5px] leading-relaxed text-muted-foreground">
         Likes are upvotes on Reddit. Shares are everything the platform reports as shared, so on X they are retweets
-        plus reposts. Retweets and reposts are only reported by X. Views are only reported by X and YouTube. Trend
-        compares each post’s engagement per day with the rest of this run.
+        plus reposts. Retweets and reposts are only reported by X. Views are only reported by X and YouTube. Sentiment
+        is scored per post: the label is positive, neutral or negative, the number runs from -1 (hostile) to +1
+        (advocating). Trend compares each post’s engagement per day with the rest of this run.
       </p>
     </>
   );
