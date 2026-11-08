@@ -1,4 +1,5 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
+import SentimentVerdict from "@/components/research/SentimentVerdict";
 import PostTable from "@/components/research/PostTable";
 import TrendingTopics from "@/components/research/TrendingTopics";
 import ExportToSheets from "@/components/research/ExportToSheets";
@@ -50,7 +51,13 @@ export default function ResearchResults({ research, posts }) {
                 {Number(research.avg_sentiment || 0).toFixed(2)} avg
               </span>
             </div>
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
+              <SentimentVerdict
+                positive={research.positive_count || 0}
+                neutral={research.neutral_count || 0}
+                negative={research.negative_count || 0}
+                avg={research.avg_sentiment}
+              />
               <SentimentSplit
                 positive={research.positive_count}
                 neutral={research.neutral_count}

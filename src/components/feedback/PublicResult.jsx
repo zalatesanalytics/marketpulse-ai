@@ -1,4 +1,5 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
+import SentimentVerdict from "@/components/research/SentimentVerdict";
 import TrendingTopics from "@/components/research/TrendingTopics";
 import PostTable from "@/components/research/PostTable";
 import DownloadExcel from "@/components/research/DownloadExcel";
@@ -23,6 +24,13 @@ export default function PublicResult({ research, posts }) {
         {research.summary && (
           <p className="font-display text-[19px] leading-[1.35] tracking-[-0.005em]">{research.summary}</p>
         )}
+
+        <SentimentVerdict
+          positive={research.positive_count || 0}
+          neutral={research.neutral_count || 0}
+          negative={research.negative_count || 0}
+          avg={research.avg_sentiment}
+        />
 
         <div className="flex items-baseline justify-between gap-3">
           <div className="min-w-0 flex-1">
