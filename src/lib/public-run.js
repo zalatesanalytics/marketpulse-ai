@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { buildQuery, rankScore, scrapePlatform } from "@/lib/apify.server";
 
-const TOP_N = 12;
-const MAX_ITEMS = 10;
+const TOP_N = 20;
+const MAX_ITEMS = 20;
 const PLATFORMS = ["reddit", "x", "youtube"];
 
 const BRIEF_SCHEMA = {
@@ -89,7 +89,6 @@ export const runPublicCheck = createServerFn({ method: "POST" })
         )
         .min(1)
         .max(16),
-      format: z.enum(["dashboard", "excel", "table"]),
     })
   )
   .handler(async ({ data, context }) => {
@@ -110,11 +109,11 @@ export const runPublicCheck = createServerFn({ method: "POST" })
       competitors: (extracted?.competitors || []).slice(0, 3).map((name) => String(name).slice(0, 60)),
       goal: String(extracted?.goal || "").trim().slice(0, 300),
     };
-    if (!brief.brand) return { ok: false, error: "I still need a brand or product name to look at." };
+    if (!brief.brand) return { ok: false, needBrand: true };
 
     const query = buildQuery(brief.brand, brief.competitors.join(", "));
     const settled = await Promise.allSettled(
-      PLATFORMS.map((platform) => scrapePlatform({ platform, query, maxItems: MAX_ITEMS, days: 30 }))
+      PLATFORMS.map((platform) => scrapePlatform({ platform, query, maxItems: MAX_ITEMS, days: 365 }))
     );
 
     const warnings = [];
@@ -142,7 +141,15 @@ export const runPublicCheck = createServerFn({ method: "POST" })
       };
     }
 
-    const top = collected.sort((a, b) => rankScore(b) - rankScore(a)).slice(0, TOP_N);
+    // The scrapers only offer day/week/month/year windows, so keep the last 90 days here.
+    const cutoff = Date.now() - 90 * 86400000;
+    const recent = collected.filter((post) => {
+      const time = Date.parse(post.published_at || "");
+      return Number.isNaN(time) || time >= cutoff;
+    });
+    const pool = recent.length ? recent : collected;
+
+    const top = pool.sort((a, b) => rankScore(b) - rankScore(a)).slice(0, TOP_N);
 
     let analysis = null;
     try {
@@ -212,7 +219,7 @@ export const runPublicCheck = createServerFn({ method: "POST" })
       neutral_count: counts.neutral,
       negative_count: counts.negative,
       avg_sentiment: Number(avg.toFixed(2)),
-      total_scraped: collected.length,
+      total_scraped: pool.length,
       warnings,
       created_date: new Date().toISOString(),
     };
@@ -222,7 +229,7 @@ export const runPublicCheck = createServerFn({ method: "POST" })
         name: "Chat visitor",
         topic: "question",
         status: "new",
-        message: `Ran a live check on ${brief.brand} (${data.format} view) from the shared chat link.`,
+        message: `Ran a live check on ${brief.brand} from the shared chat link.`,
       })
       .catch(() => {});
 
