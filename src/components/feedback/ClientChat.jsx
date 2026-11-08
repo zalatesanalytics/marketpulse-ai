@@ -41,6 +41,8 @@ export default function ClientChat() {
   const run = async (history) => {
     setRunning(true);
     setError("");
+    // A new task replaces the report on screen instead of stacking under the old one.
+    setResult(null);
     try {
       const started = await startCheck({ data: { messages: history.slice(-12) } });
       if (!started.ok) {
@@ -73,7 +75,7 @@ export default function ClientChat() {
     setMessages((prev) => [...prev, { role: "assistant", content: ASK_TO_SIGN_IN }]);
   };
 
-  const post = async (text) => {
+  const post = async (text, { fresh = false } = {}) => {
     const content = text.trim();
     if (!content || busy) return;
     const next = [...messages, { role: "user", content }];
@@ -88,7 +90,8 @@ export default function ClientChat() {
 
     setBusy(true);
 
-    const read = !result && !running ? run(next) : null;
+    // A brand picked from the list is a new task, so only that message shapes the read.
+    const read = !running ? run(fresh ? [{ role: "user", content }] : next) : null;
 
     try {
       const { reply } = await send({ data: { messages: next.slice(-12) } });
@@ -146,8 +149,8 @@ export default function ClientChat() {
           <div ref={endRef} />
         </div>
 
-        {messages.length === 1 && !result && (
-          <BrandPicker onPick={post} disabled={busy || running} />
+        {!busy && !running && !needsAccount && (
+          <BrandPicker onPick={(brand) => post(brand, { fresh: true })} disabled={busy || running} />
         )}
 
         {error && <p className="px-4 pb-2 text-[11.5px] text-[hsl(0_60%_42%)]">{error}</p>}
