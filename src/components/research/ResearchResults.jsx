@@ -4,6 +4,7 @@ import PostTable from "@/components/research/PostTable";
 import ReactionsTable from "@/components/research/ReactionsTable";
 import TrendingTopics from "@/components/research/TrendingTopics";
 import ExportToSheets from "@/components/research/ExportToSheets";
+import ExportToDocs from "@/components/research/ExportToDocs";
 import DownloadExcel from "@/components/research/DownloadExcel";
 
 export default function ResearchResults({ research, posts }) {
@@ -27,6 +28,7 @@ export default function ResearchResults({ research, posts }) {
       <div className="flex flex-wrap justify-end gap-2">
         <DownloadExcel research={research} posts={posts} />
         <ExportToSheets researchId={research.id} />
+        <ExportToDocs researchId={research.id} />
       </div>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">

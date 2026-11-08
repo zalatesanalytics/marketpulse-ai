@@ -307,6 +307,184 @@ export const exportResearchToSheets = createServerFn({ method: "POST" })
     return { ok: true, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` };
   });
 
+/* ------------------------------------------------------------ gdocs */
+
+const docEsc = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const DOC_COLORS = { positive: "#6f9a48", neutral: "#bdb7ac", negative: "#c05a33" };
+
+// A proportion bar built from coloured table cells: Drive's HTML import keeps it,
+// and it reads as a chart inside the finished document.
+const sentimentBarHtml = (positive, neutral, negative) => {
+  const total = positive + neutral + negative || 1;
+  const cells = [
+    ["positive", positive],
+    ["neutral", neutral],
+    ["negative", negative],
+  ]
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => {
+      const width = Math.max(Math.round((count / total) * 100), 3);
+      return `<td width="${width}%" style="background-color:${DOC_COLORS[key]};height:16px;font-size:1px;line-height:1px">&nbsp;</td>`;
+    })
+    .join("");
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 10px"><tr>${cells}</tr></table>`;
+};
+
+const CELL = 'style="border:1px solid #d8d4cc;padding:6px 8px;font-size:9.5pt;vertical-align:top"';
+const HEAD = 'style="border:1px solid #d8d4cc;padding:6px 8px;font-size:8.5pt;letter-spacing:0.05em;color:#6e695e;background-color:#f4f1ea"';
+
+const docHtml = (research, posts) => {
+  const positive = Number(research.positive_count) || 0;
+  const neutral = Number(research.neutral_count) || 0;
+  const negative = Number(research.negative_count) || 0;
+  const ranked = positive + neutral + negative;
+  const avg = Number(research.avg_sentiment) || 0;
+  const share = (count) => (ranked ? `${Math.round((count / ranked) * 100)}%` : "—");
+  const topics = research.trending_topics?.length
+    ? research.trending_topics
+    : (research.themes || []).map((topic) => ({ topic }));
+
+  const topicRows = topics
+    .slice(0, 10)
+    .map(
+      (topic, i) =>
+        `<tr><td ${CELL}>${i + 1}</td><td ${CELL}>${docEsc(topic.topic)}</td><td ${CELL}>${
+          topic.mentions ? `${topic.mentions} posts` : "—"
+        }</td><td ${CELL}>${docEsc(topic.sentiment || "—")}</td></tr>`
+    )
+    .join("");
+
+  const postRows = posts
+    .map(
+      (post) => `<tr>
+        <td ${CELL}>${post.rank ?? ""}</td>
+        <td ${CELL}>${docEsc(String(post.platform || "").toUpperCase())}</td>
+        <td ${CELL}>${post.url ? `<a href="${docEsc(post.url)}">${docEsc(post.title)}</a>` : docEsc(post.title)}</td>
+        <td ${CELL}>${Number(post.engagement) || 0}</td>
+        <td ${CELL}>${Number(post.comments) || 0}</td>
+        <td ${CELL}>${Number(post.views) || 0}</td>
+        <td ${CELL}>${docEsc(post.sentiment || "—")} ${(Number(post.sentiment_score) || 0).toFixed(2)}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<html><head><meta charset="utf-8"><style>
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.55; color: #1a1814; }
+    h1 { font-size: 24pt; font-weight: normal; margin: 0 0 4px; }
+    h2 { font-size: 12pt; margin: 22px 0 8px; color: #a73c1b; }
+    p { margin: 0 0 8px; }
+    a { color: #a73c1b; }
+    .meta { color: #6e695e; font-size: 9.5pt; }
+  </style></head><body>
+    <h1>${docEsc(research.brand)} — social listening</h1>
+    <p class="meta">${docEsc(
+      [
+        new Date(research.created_date || Date.now()).toISOString().slice(0, 10),
+        (research.platforms || []).join(", "),
+        research.category,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    )}</p>
+
+    <h2>The read-out</h2>
+    <p>${docEsc(research.summary || "No summary was generated for this run.")}</p>
+
+    ${research.recommendation ? `<h2>Recommended move</h2><p>${docEsc(research.recommendation)}</p>` : ""}
+
+    <h2>Sentiment chart</h2>
+    <p class="meta">${ranked} posts ranked · average score ${avg > 0 ? "+" : ""}${avg.toFixed(
+      2
+    )} (from -1 hostile to +1 advocating)</p>
+    ${sentimentBarHtml(positive, neutral, negative)}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      <tr><td ${HEAD}>Sentiment</td><td ${HEAD}>Posts</td><td ${HEAD}>Share</td></tr>
+      <tr><td ${CELL}>Positive</td><td ${CELL}>${positive}</td><td ${CELL}>${share(positive)}</td></tr>
+      <tr><td ${CELL}>Neutral</td><td ${CELL}>${neutral}</td><td ${CELL}>${share(neutral)}</td></tr>
+      <tr><td ${CELL}>Negative</td><td ${CELL}>${negative}</td><td ${CELL}>${share(negative)}</td></tr>
+    </table>
+
+    ${
+      topicRows
+        ? `<h2>Trending topics</h2>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      <tr><td ${HEAD}>#</td><td ${HEAD}>Topic</td><td ${HEAD}>Volume</td><td ${HEAD}>Sentiment</td></tr>
+      ${topicRows}
+    </table>`
+        : ""
+    }
+
+    <h2>Top ${posts.length} posts, ranked</h2>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+      <tr><td ${HEAD}>#</td><td ${HEAD}>Platform</td><td ${HEAD}>Post</td><td ${HEAD}>Likes</td><td ${HEAD}>Comments</td><td ${HEAD}>Views</td><td ${HEAD}>Sentiment</td></tr>
+      ${postRows}
+    </table>
+
+    <p class="meta" style="margin-top:22px">${Number(research.total_scraped) || 0} posts read · prepared with MarketPulse AI</p>
+  </body></html>`;
+};
+
+export const exportResearchToDoc = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ research_id: z.string().min(1) }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44();
+    const research = await base44.entities.Research.get(data.research_id).catch((error) => {
+      if (error?.status === 404) return null;
+      throw error;
+    });
+    if (!research) return { ok: false, error: "This research run no longer exists." };
+    if (research.status !== "complete") return { ok: false, error: "Finish the run before exporting it." };
+
+    const page = await base44.entities.Post.filter({ research_id: research.id }, { sort: "rank", limit: 50 });
+
+    let accessToken;
+    try {
+      ({ accessToken } = await base44.asServiceRole.connectors.getConnection("googledocs"));
+    } catch {
+      return { ok: false, error: "Google Docs is not connected yet. Approve the connection, then export again." };
+    }
+
+    const boundary = `signaldesk_${Date.now().toString(36)}`;
+    const metadata = {
+      name: `${research.brand} — social listening ${new Date().toISOString().slice(0, 10)}`,
+      mimeType: "application/vnd.google-apps.document",
+    };
+    const body = [
+      `--${boundary}`,
+      "Content-Type: application/json; charset=UTF-8",
+      "",
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "",
+      docHtml(research, page.items),
+      `--${boundary}--`,
+    ].join("\r\n");
+
+    const upload = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+    if (!upload.ok) {
+      const detail = await upload.text();
+      return { ok: false, error: `Google Docs refused the export (${upload.status}). ${detail.slice(0, 160)}` };
+    }
+
+    const { id } = await upload.json();
+    return { ok: true, url: `https://docs.google.com/document/d/${id}/edit` };
+  });
+
 /* --------------------------------------------------------- client notes */
 
 // Deliberately public: the shared link is how a client reaches the desk without an account.
