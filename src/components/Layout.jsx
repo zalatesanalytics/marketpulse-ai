@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, History, LogOut, Radar, LayoutDashboard } from "lucide-react";
+import { Plus, History, LogOut, Radar, LayoutDashboard, MessageSquare } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,7 @@ const NAV = [
   { to: "/", label: "New research", icon: Plus, exact: true },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: false },
   { to: "/history", label: "History", icon: History, exact: false },
+  { to: "/notes", label: "Client notes", icon: MessageSquare, exact: false },
 ];
 
 export default function Layout({ children }) {

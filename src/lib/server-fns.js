@@ -394,3 +394,44 @@ export const exportResearchToSheets = createServerFn({ method: "POST" })
 
     return { ok: true, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` };
   });
+
+/* --------------------------------------------------------- client notes */
+
+// Deliberately public: the shared link is how a client reaches the desk without an account.
+export const submitClientFeedback = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      name: z.string().min(1).max(80),
+      email: z.string().max(160).optional().default(""),
+      company: z.string().max(120).optional().default(""),
+      topic: z.enum(["feedback", "bug", "question"]).default("feedback"),
+      message: z.string().min(2).max(4000),
+    })
+  )
+  .handler(async ({ data, context }) => {
+    await context.getBase44().entities.ClientFeedback.create({ ...data, status: "new" });
+    return { ok: true };
+  });
+
+export const listClientFeedback = createServerFn({ method: "GET" })
+  .middleware([requireUser])
+  .handler(async ({ context }) => {
+    const page = await context.getBase44().entities.ClientFeedback.list({ sort: "-created_date", limit: 100 });
+    return page.items;
+  });
+
+export const setClientFeedbackStatus = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ id: z.string().min(1), status: z.enum(["new", "done"]) }))
+  .handler(async ({ data, context }) => {
+    await context.getBase44().entities.ClientFeedback.update(data.id, { status: data.status });
+    return { ok: true };
+  });
+
+export const deleteClientFeedback = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ id: z.string().min(1) }))
+  .handler(async ({ data, context }) => {
+    await context.getBase44().entities.ClientFeedback.delete(data.id);
+    return { ok: true };
+  });
