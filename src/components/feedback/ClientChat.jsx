@@ -3,14 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUp, Loader2, Radar, RotateCw } from "lucide-react";
 import { chatWithDesk } from "@/lib/server-fns";
 import { readPublicCheck, startPublicCheck } from "@/lib/public-run";
+import BrandPicker from "@/components/feedback/BrandPicker";
 import PublicResult from "@/components/feedback/PublicResult";
 import SignInInvite from "@/components/feedback/SignInInvite";
 import { useAuth } from "@/lib/AuthContext";
 
 const GREETING =
   "Hi — I’m the Signal Desk assistant. Give me a product or brand name and I’ll bring back the top 20 posts from the past 90 days on Reddit, X and YouTube, ranked with comments, views, reactions, dates and sentiment.";
-
-const SUGGESTIONS = ["Nike", "How does sentiment scoring work?", "Which platforms should I start with?"];
 
 // One guest scan per visit: another brand needs an account, so the report is kept.
 const ASK_TO_SIGN_IN =
@@ -147,18 +146,8 @@ export default function ClientChat() {
           <div ref={endRef} />
         </div>
 
-        {messages.length === 1 && (
-          <div className="flex flex-wrap gap-1.5 px-4 pb-3">
-            {SUGGESTIONS.map((suggestion) => (
-              <button
-                key={suggestion}
-                onClick={() => post(suggestion)}
-                className="rounded-full border border-border px-2.5 py-1.5 text-[11.5px] leading-tight text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
+        {messages.length === 1 && !result && (
+          <BrandPicker onPick={post} disabled={busy || running} />
         )}
 
         {error && <p className="px-4 pb-2 text-[11.5px] text-[hsl(0_60%_42%)]">{error}</p>}
@@ -169,7 +158,7 @@ export default function ClientChat() {
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Type a product or brand name…"
+            placeholder="Pick a brand above, or type any product or brand…"
             className="max-h-32 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-[13px] leading-relaxed outline-none placeholder:text-muted-foreground/60 focus:border-foreground/40"
           />
           <button
