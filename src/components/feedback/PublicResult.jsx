@@ -1,6 +1,7 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
 import SentimentVerdict from "@/components/research/SentimentVerdict";
 import TrendingTopics from "@/components/research/TrendingTopics";
+import ReactionsTable from "@/components/research/ReactionsTable";
 import PostTable from "@/components/research/PostTable";
 import DownloadExcel from "@/components/research/DownloadExcel";
 
@@ -54,6 +55,8 @@ export default function PublicResult({ research, posts }) {
         )}
 
         <TrendingTopics topics={research.trending_topics || []} />
+
+        <ReactionsTable posts={posts} />
 
         <div className="border-t border-border pt-3">
           <PostTable posts={posts} />

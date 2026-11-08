@@ -1,6 +1,7 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
 import SentimentVerdict from "@/components/research/SentimentVerdict";
 import PostTable from "@/components/research/PostTable";
+import ReactionsTable from "@/components/research/ReactionsTable";
 import TrendingTopics from "@/components/research/TrendingTopics";
 import ExportToSheets from "@/components/research/ExportToSheets";
 import DownloadExcel from "@/components/research/DownloadExcel";
@@ -74,6 +75,8 @@ export default function ResearchResults({ research, posts }) {
       </section>
 
       <TrendingTopics topics={topics} />
+
+      <ReactionsTable posts={posts} />
 
       <section className="rounded-xl border border-border bg-card p-5 md:p-6">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
