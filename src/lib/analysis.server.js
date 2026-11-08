@@ -1,6 +1,10 @@
 import { buildQuery, collectScrape, rankScore, startScrape } from "@/lib/apify.server";
+import { buildBrandKeywords, gateByBrand } from "@/lib/brand-filter";
 
 const TOP_N = 20;
+// Score more candidates than the report shows, so the generic name matches removed
+// afterwards do not eat the 20 places the report has.
+const CANDIDATES = 40;
 const PLATFORMS = ["reddit", "x", "youtube"];
 const PUBLIC_MAX_ITEMS = 20;
 const PUBLIC_DAYS = 90;
@@ -75,9 +79,9 @@ For every numbered post return sentiment (positive | neutral | negative, judged 
 Return exactly one row per numbered post, using its number as index. A positive label must carry a score above 0, a negative label below 0. If a post says too little to judge, use neutral with score 0 and say so in reason. Never invent, merge or reorder posts, and never quote text that is not in the post.
 Set offTopic to true when the post is not actually about the brand ${brief.brand}${
   brief.category ? `, the ${brief.category},` : " the brand:"
-} — a person or athlete with the same name, a different company, a team, place, film, game, or a coincidental word match. Posts about a same-named person say nothing about the brand and must never be scored, summarised or counted. Leave every off-topic post neutral with score 0.
+} — a person or athlete with the same name, a different company, a team, place, film, game, or a coincidental word match. Posts about a same-named person say nothing about the brand and must never be scored, summarised or counted. Leave every off-topic post neutral with score 0. Be strict: a post that merely contains the brand word, without saying anything about the brand as a company or its products, is off-topic. If you are unsure whether a post is about the brand or about something that shares its name, mark it offTopic.
 Then return:
-- summary: 2-3 sentences on what the conversation as a whole says
+- summary: 2-3 sentences on what the conversation as a whole says. Write it only from the posts that are about the brand; ignore everything you marked offTopic.
 - trending_topics: the top 10 topics driving the conversation, most discussed first. Each: topic (2 to 5 words, specific to ${brief.brand}), mentions (listed posts that touch it, never a like or comment count), sentiment
 - recommendation: 2-3 sentences of concrete next actions
 
@@ -182,23 +186,38 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
   });
   const pool = recent.length ? recent : collected;
 
-  const ranked = [...pool].sort((a, b) => rankScore(b) - rankScore(a));
-  // Keep every platform represented, then fill the rest by engagement.
+  // Strict brand gate before anything is ranked: a post has to name the brand itself.
+  // A pull for "Jordan" is full of the athlete's games, and those must never take a
+  // top-20 place away from a post about the brand.
+  const keywords = buildBrandKeywords(brief);
+  const gated = gateByBrand(pool, keywords);
+  if (!gated.kept.length) {
+    return { ok: false, error: `Nothing in the pull actually mentioned ${brief.brand}.` };
+  }
+  if (gated.dropped) {
+    warnings.push(
+      `${gated.dropped} post${gated.dropped === 1 ? "" : "s"} never mentioned ${brief.brand} and ${
+        gated.dropped === 1 ? "was" : "were"
+      } left out.`
+    );
+  }
+
+  const ranked = [...gated.kept].sort((a, b) => rankScore(b) - rankScore(a));
+  // Keep every platform represented, then fill the candidate pool by engagement.
   const selected = [];
   PLATFORMS.forEach((platform) => {
     ranked
       .filter((post) => post.platform === platform)
-      .slice(0, 4)
+      .slice(0, 5)
       .forEach((post) => {
-        if (!selected.includes(post)) selected.push(post);
+        if (selected.length < CANDIDATES && !selected.includes(post)) selected.push(post);
       });
   });
   ranked.forEach((post) => {
-    if (selected.length < TOP_N && !selected.includes(post)) selected.push(post);
+    if (selected.length < CANDIDATES && !selected.includes(post)) selected.push(post);
   });
-  const top = selected.slice(0, TOP_N).sort((a, b) => rankScore(b) - rankScore(a));
 
-  const marked = top;
+  const marked = selected.slice(0, CANDIDATES);
 
   const listing = (indices) =>
     indices
@@ -248,15 +267,31 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
 
   // A brand name can match something else entirely (Nike pulls the game NIKKE), so
   // anything the scorer calls off-topic is dropped instead of counted as neutral coverage.
-  const kept = marked
+  const survivors = marked
     .map((post, index) => ({ post, row: rows.get(index) }))
-    .filter(({ row }) => !row?.offTopic);
-  const dropped = marked.length - kept.length;
+    .filter(({ row }) => !row?.offTopic)
+    .sort((a, b) => rankScore(b.post) - rankScore(a.post));
+  const dropped = marked.length - survivors.length;
   if (dropped) {
     warnings.push(
-      `${dropped} post${dropped === 1 ? "" : "s"} matched the name but ${dropped === 1 ? "was" : "were"} about something else, so ${dropped === 1 ? "it was" : "they were"} left out of the report.`
+      `${dropped} post${dropped === 1 ? "" : "s"} only shared the name and ${dropped === 1 ? "was" : "were"} about something else, so ${dropped === 1 ? "it was" : "they were"} left out of the report.`
     );
   }
+
+  // Out of the brand-relevant survivors, keep every platform represented and report 20.
+  const final = [];
+  PLATFORMS.forEach((platform) => {
+    survivors
+      .filter((entry) => entry.post.platform === platform)
+      .slice(0, 4)
+      .forEach((entry) => {
+        if (!final.includes(entry)) final.push(entry);
+      });
+  });
+  survivors.forEach((entry) => {
+    if (final.length < TOP_N && !final.includes(entry)) final.push(entry);
+  });
+  const kept = final.slice(0, TOP_N).sort((a, b) => rankScore(b.post) - rankScore(a.post));
 
   // Trend is measured against the posts actually reported, not the raw pull.
   const medianVelocity = medianOf(kept.map(({ post }) => velocityOf(post)));
