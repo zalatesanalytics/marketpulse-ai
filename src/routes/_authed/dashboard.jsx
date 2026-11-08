@@ -48,7 +48,7 @@ function DashboardPage() {
           <h1 className="mt-2 font-display text-[34px] leading-tight tracking-[-0.01em]">Every run at a glance</h1>
         </div>
         <Link
-          to="/"
+          to="/new"
           className="flex items-center gap-1.5 rounded-md bg-foreground px-3.5 py-2 text-[12.5px] text-background transition-opacity hover:opacity-90"
         >
           New research <ArrowUpRight className="h-3.5 w-3.5" />
@@ -61,7 +61,7 @@ function DashboardPage() {
           <p className="mx-auto mt-2 max-w-[360px] text-[13px] leading-relaxed text-muted-foreground">
             Your first completed run fills this overview with sentiment totals and its recommendation.
           </p>
-          <Link to="/" className="mt-5 inline-block rounded-md border border-border px-4 py-2 text-[12.5px] hover:bg-card">
+          <Link to="/new" className="mt-5 inline-block rounded-md border border-border px-4 py-2 text-[12.5px] hover:bg-card">
             Start a research
           </Link>
         </div>

@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "New research", icon: Plus, exact: true },
+  { to: "/new", label: "New research", icon: Plus, exact: true },
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: false },
   { to: "/history", label: "History", icon: History, exact: false },
   { to: "/notes", label: "Client notes", icon: MessageSquare, exact: false },
@@ -17,7 +17,7 @@ export default function Layout({ children }) {
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-[1440px]">
         <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-border bg-[hsl(40_28%_95%)] px-5 py-7 md:flex">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/new" className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-background">
               <Radar className="h-4 w-4" />
             </span>
@@ -56,7 +56,7 @@ export default function Layout({ children }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between border-b border-border px-5 py-3 md:hidden">
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/new" className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-background">
                 <Radar className="h-3.5 w-3.5" />
               </span>

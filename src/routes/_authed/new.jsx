@@ -6,7 +6,7 @@ import IntakeWizard from "@/components/research/IntakeWizard";
 import SampleRunPreview from "@/components/research/SampleRunPreview";
 import { createResearch } from "@/lib/server-fns";
 
-export const Route = createFileRoute("/_authed/")({
+export const Route = createFileRoute("/_authed/new")({
   component: NewResearchPage,
   head: () => ({
     meta: [
