@@ -28,7 +28,7 @@ function ClientFeedbackPage() {
 
         <header className="mt-8">
           <h1 className="font-display text-[32px] leading-[1.08] tracking-[-0.01em] md:text-[38px]">
-            Tell us how the test went.
+            I can help you read what’s happening in what you think.
           </h1>
           <p className="mt-3 max-w-[440px] text-[13.5px] leading-relaxed text-muted-foreground">
             You are looking at the research desk before it goes live. Leave a note about what you tried, what broke, or
