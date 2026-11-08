@@ -39,8 +39,21 @@ export const startPublicCheck = createServerFn({ method: "POST" })
     startPublicAnalysis({ base44: context.getBase44().asServiceRole, messages: data.messages })
   );
 
+// elapsedMs lets the read give up waiting on a slow platform instead of holding the
+// visitor for the whole crawl.
 export const readPublicCheck = createServerFn({ method: "POST" })
-  .validator(z.object({ brief: BriefInput, runs: RunsInput }))
+  .validator(
+    z.object({
+      brief: BriefInput,
+      runs: RunsInput,
+      elapsedMs: z.number().min(0).max(600000).optional().default(0),
+    })
+  )
   .handler(({ data, context }) =>
-    readPublicAnalysis({ base44: context.getBase44().asServiceRole, brief: data.brief, runs: data.runs })
+    readPublicAnalysis({
+      base44: context.getBase44().asServiceRole,
+      brief: data.brief,
+      runs: data.runs,
+      elapsedMs: data.elapsedMs,
+    })
   );

@@ -49,10 +49,13 @@ export default function ClientChat() {
         return;
       }
 
-      const deadline = Date.now() + 180000;
+      const began = Date.now();
+      const deadline = began + 180000;
       while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        const step = await readCheck({ data: { brief: started.brief, runs: started.runs } });
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const step = await readCheck({
+          data: { brief: started.brief, runs: started.runs, elapsedMs: Date.now() - began },
+        });
         if (step.stage === "scraping") continue;
         if (step.ok) setResult(step);
         else setError(step.error || "The read didn’t come back. Try again.");
@@ -184,7 +187,7 @@ export default function ClientChat() {
         <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           <p className="text-[12px] leading-relaxed text-muted-foreground">
-            Reading the past 90 days on Reddit, X and YouTube, then ranking the top 20. About a minute.
+            Reading the past 90 days on Reddit, X and YouTube, then ranking the top 20. The crawlers do the slow part, so this usually lands in under a minute.
           </p>
         </div>
       )}

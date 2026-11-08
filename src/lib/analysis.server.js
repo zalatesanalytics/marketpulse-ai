@@ -2,12 +2,18 @@ import { buildQuery, collectScrape, rankScore, startScrape } from "@/lib/apify.s
 import { buildBrandKeywords, gateByBrand } from "@/lib/brand-filter";
 
 const TOP_N = 20;
-// Score more candidates than the report shows, so the generic name matches removed
-// afterwards do not eat the 20 places the report has.
-const CANDIDATES = 40;
+// Score a few more candidates than the report shows, so the generic name matches
+// removed afterwards do not eat the 20 places the report has. Each extra candidate
+// costs scoring time, so this stays a little above the 20 needed.
+const CANDIDATES = 30;
 const PLATFORMS = ["reddit", "x", "youtube"];
-const PUBLIC_MAX_ITEMS = 20;
+// Posts asked of each scraper: enough for a brand-gated top 20, small enough that the
+// slowest actor (YouTube) finishes sooner.
+const PUBLIC_MAX_ITEMS = 15;
 const PUBLIC_DAYS = 90;
+// If a platform is still crawling after this long, the read goes ahead with the
+// platforms that finished instead of holding everything for the slowest one.
+const GRACE_MS = 75000;
 
 const BRIEF_SCHEMA = {
   type: "object",
@@ -146,7 +152,7 @@ export async function startScrapes({
 
 // Reads every started run. While any is still crawling it returns { pending: true };
 // once they are all in it ranks the top 20 and scores them.
-export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS }) {
+export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS, elapsedMs = 0 }) {
   const settled = await Promise.allSettled(runs.map((run) => collectScrape(run)));
 
   const warnings = [];
@@ -173,7 +179,16 @@ export async function collectAndScore({ base44, brief, runs, days = PUBLIC_DAYS 
     });
   });
 
-  if (pending.length) return { ok: true, pending: true, pendingPlatforms: pending };
+  if (pending.length) {
+    // Never wait on the slowest actor forever: once the grace period is up, rank what
+    // came back and say which platform was left out of this read.
+    if (!collected.length || elapsedMs < GRACE_MS) {
+      return { ok: true, pending: true, pendingPlatforms: pending };
+    }
+    warnings.push(
+      `${pending.join(" and ")} ${pending.length > 1 ? "were" : "was"} still crawling, so this read covers the platforms that finished.`
+    );
+  }
   if (!collected.length) {
     return { ok: false, error: warnings[0] || `No public posts turned up for ${brief.brand}.` };
   }
@@ -385,8 +400,8 @@ export async function startPublicAnalysis({ base44, messages }) {
 
 // Step 2: called until every started run has finished, then ranked, scored and saved
 // as a Research record with its Post rows.
-export async function readPublicAnalysis({ base44, brief, runs }) {
-  const step = await collectAndScore({ base44, brief, runs, days: PUBLIC_DAYS });
+export async function readPublicAnalysis({ base44, brief, runs, elapsedMs = 0 }) {
+  const step = await collectAndScore({ base44, brief, runs, days: PUBLIC_DAYS, elapsedMs });
   if (step.pending) return { ok: true, stage: "scraping", pending: step.pendingPlatforms };
   if (!step.ok) return { ok: false, error: step.error };
 
