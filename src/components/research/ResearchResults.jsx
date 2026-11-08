@@ -1,6 +1,7 @@
 import SentimentSplit from "@/components/research/SentimentSplit";
 import PostTable from "@/components/research/PostTable";
 import TrendingTopics from "@/components/research/TrendingTopics";
+import ExportToSheets from "@/components/research/ExportToSheets";
 
 export default function ResearchResults({ research, posts }) {
   const topics = research.trending_topics?.length
@@ -19,6 +20,10 @@ export default function ResearchResults({ research, posts }) {
           </ul>
         </div>
       )}
+
+      <div className="flex justify-end">
+        <ExportToSheets researchId={research.id} />
+      </div>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="rounded-xl border border-border bg-card p-6">

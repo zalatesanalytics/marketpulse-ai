@@ -291,3 +291,106 @@ export const runResearch = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+/* --------------------------------------------------------------- sheets */
+
+export const exportResearchToSheets = createServerFn({ method: "POST" })
+  .middleware([requireUser])
+  .validator(z.object({ research_id: z.string().min(1) }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44();
+    const research = await base44.entities.Research.get(data.research_id).catch((error) => {
+      if (error?.status === 404) return null;
+      throw error;
+    });
+    if (!research) return { ok: false, error: "This research run no longer exists." };
+    if (research.status !== "complete") return { ok: false, error: "Finish the run before exporting it." };
+
+    const page = await base44.entities.Post.filter({ research_id: research.id }, { sort: "rank", limit: 50 });
+    const posts = page.items;
+
+    let accessToken;
+    try {
+      ({ accessToken } = await base44.asServiceRole.connectors.getConnection("googlesheets"));
+    } catch {
+      return { ok: false, error: "Google Sheets is not connected yet. Approve the connection, then export again." };
+    }
+
+    const created = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        properties: { title: `${research.brand} — social listening ${new Date().toISOString().slice(0, 10)}` },
+        sheets: [{ properties: { title: "Ranking" } }, { properties: { title: "Trend report" } }],
+      }),
+    });
+    if (!created.ok) return { ok: false, error: `Google Sheets refused the export (${created.status}).` };
+    const { spreadsheetId } = await created.json();
+
+    const ranking = [
+      ["Rank", "Platform", "Title", "Author", "Community", "Likes", "Comments", "Views", "Trend", "Sentiment", "Score", "Posted", "URL"],
+      ...posts.map((p) => [
+        p.rank ?? "",
+        p.platform || "",
+        p.title || "",
+        p.author || "",
+        p.community || "",
+        Number(p.engagement) || 0,
+        Number(p.comments) || 0,
+        Number(p.views) || 0,
+        p.trend || "",
+        p.sentiment || "",
+        Number(p.sentiment_score) || 0,
+        p.published_at ? String(p.published_at).slice(0, 10) : "",
+        p.url || "",
+      ]),
+    ];
+
+    const topics = research.trending_topics?.length
+      ? research.trending_topics
+      : (research.themes || []).map((topic) => ({ topic }));
+
+    const report = [
+      ["Signal Desk — trend report"],
+      ["Brand", research.brand || ""],
+      ["Category", research.category || ""],
+      ["Competitors", research.competitors || ""],
+      ["Decision supported", research.goal || ""],
+      ["Platforms", (research.platforms || []).join(", ")],
+      ["Posts read", Number(research.total_scraped) || 0],
+      ["Ranked", posts.length],
+      [],
+      ["Sentiment", "Count"],
+      ["Positive", Number(research.positive_count) || 0],
+      ["Neutral", Number(research.neutral_count) || 0],
+      ["Negative", Number(research.negative_count) || 0],
+      ["Average score", Number(research.avg_sentiment) || 0],
+      [],
+      ["What the conversation says"],
+      [research.summary || ""],
+      [],
+      ["Recommended move"],
+      [research.recommendation || ""],
+      [],
+      ["Top topics", "Mentions", "Sentiment"],
+      ...topics.map((t) => [t.topic || "", Number(t.mentions) || "", t.sentiment || ""]),
+    ];
+
+    const written = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valueInputOption: "USER_ENTERED",
+          data: [
+            { range: "Ranking!A1", values: ranking },
+            { range: "Trend report!A1", values: report },
+          ],
+        }),
+      }
+    );
+    if (!written.ok) return { ok: false, error: `The spreadsheet could not be written to (${written.status}).` };
+
+    return { ok: true, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` };
+  });
