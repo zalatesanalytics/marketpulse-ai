@@ -2,6 +2,7 @@ import SentimentSplit from "@/components/research/SentimentSplit";
 import PostTable from "@/components/research/PostTable";
 import TrendingTopics from "@/components/research/TrendingTopics";
 import ExportToSheets from "@/components/research/ExportToSheets";
+import DownloadExcel from "@/components/research/DownloadExcel";
 
 export default function ResearchResults({ research, posts }) {
   const topics = research.trending_topics?.length
@@ -21,7 +22,8 @@ export default function ResearchResults({ research, posts }) {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <DownloadExcel research={research} posts={posts} />
         <ExportToSheets researchId={research.id} />
       </div>
 
