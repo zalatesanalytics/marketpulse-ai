@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Radar } from "lucide-react";
 import ClientChat from "@/components/feedback/ClientChat";
 
@@ -25,9 +26,13 @@ export default function DeskLanding() {
           <ClientChat />
         </div>
 
-        <p className="mt-4 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground">
-          No account needed · the research desk reads every question
-        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground">
+          <span>No account needed · the research desk reads every question</span>
+          <span aria-hidden="true">·</span>
+          <Link to="/build-guide" className="underline-offset-2 transition-colors hover:text-foreground hover:underline">
+            How this is built
+          </Link>
+        </div>
       </div>
     </div>
   );
