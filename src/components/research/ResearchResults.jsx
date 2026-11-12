@@ -6,6 +6,7 @@ import TrendingTopics from "@/components/research/TrendingTopics";
 import ExportToSheets from "@/components/research/ExportToSheets";
 import ExportToDocs from "@/components/research/ExportToDocs";
 import DownloadExcel from "@/components/research/DownloadExcel";
+import DownloadPdf from "@/components/research/DownloadPdf";
 
 export default function ResearchResults({ research, posts }) {
   const topics = research.trending_topics?.length
@@ -26,6 +27,7 @@ export default function ResearchResults({ research, posts }) {
       )}
 
       <div className="flex flex-wrap justify-end gap-2">
+        <DownloadPdf research={research} posts={posts} />
         <DownloadExcel research={research} posts={posts} />
         <ExportToSheets researchId={research.id} />
         <ExportToDocs researchId={research.id} />

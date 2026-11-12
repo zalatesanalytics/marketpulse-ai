@@ -4,6 +4,7 @@ import TrendingTopics from "@/components/research/TrendingTopics";
 import ReactionsTable from "@/components/research/ReactionsTable";
 import PostTable from "@/components/research/PostTable";
 import DownloadExcel from "@/components/research/DownloadExcel";
+import DownloadPdf from "@/components/research/DownloadPdf";
 
 export default function PublicResult({ research, posts }) {
   return (
@@ -66,7 +67,10 @@ export default function PublicResult({ research, posts }) {
           <p className="text-[11.5px] leading-relaxed text-muted-foreground">
             Every post links to its source, with likes, comments, views, shares, retweets and reposts.
           </p>
-          <DownloadExcel research={research} posts={posts} />
+          <div className="flex flex-wrap items-center gap-2">
+            <DownloadPdf research={research} posts={posts} />
+            <DownloadExcel research={research} posts={posts} />
+          </div>
         </div>
 
         {!!research.warnings?.length && (
