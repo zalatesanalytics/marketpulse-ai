@@ -485,6 +485,27 @@ export const exportResearchToDoc = createServerFn({ method: "POST" })
     return { ok: true, url: `https://docs.google.com/document/d/${id}/edit` };
   });
 
+/* ------------------------------------------------------- shared report */
+
+// Deliberately public: the share link is how a client opens a finished read
+// without an account. Only completed runs are readable, and only by their id.
+export const getPublicReport = createServerFn({ method: "GET" })
+  .validator(z.object({ research_id: z.string().min(1).max(64) }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44().asServiceRole;
+    const research = await base44.entities.Research.get(data.research_id).catch((error) => {
+      if (error?.status === 404) return null;
+      throw error;
+    });
+    if (!research || research.status !== "complete") return null;
+
+    const page = await base44.entities.Post.filter(
+      { research_id: research.id },
+      { sort: "rank", limit: 50 }
+    );
+    return { research, posts: page.items };
+  });
+
 /* --------------------------------------------------------- client notes */
 
 // Deliberately public: the shared link is how a client reaches the desk without an account.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, Loader2, Radar, RotateCw } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowUp, ExternalLink, Loader2, Radar, RotateCw } from "lucide-react";
 import { chatWithDesk } from "@/lib/server-fns";
 import { readPublicCheck, startPublicCheck } from "@/lib/public-run";
 import BrandPicker from "@/components/feedback/BrandPicker";
@@ -186,7 +187,14 @@ export default function ClientChat() {
 
       {result && (
         <div className="space-y-2">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              to="/report/$researchId"
+              params={{ researchId: result.research.id }}
+              className="inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-primary underline-offset-2 hover:underline"
+            >
+              Open full report <ExternalLink className="h-3 w-3" />
+            </Link>
             <button
               onClick={() => (needsAccount ? askToSignIn() : run(messages))}
               disabled={running}
