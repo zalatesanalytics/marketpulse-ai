@@ -116,7 +116,8 @@ export default function QualityChat() {
 
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
           Answers are written from the posts the scraper actually returned on Reddit, X and YouTube — a sample, not the
-          whole internet. A question already answered comes back instantly from the saved result.
+          whole internet. A question already answered comes back instantly, and a brand or category read in the last two
+          weeks is answered from the sample already saved.
         </p>
       </div>
     </div>

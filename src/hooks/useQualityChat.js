@@ -46,6 +46,16 @@ export default function useQualityChat() {
       return;
     }
 
+    if (resolved.reused) {
+      setStage("Reading the sample already saved for this category…");
+      const step = await readCategory({
+        data: { question: content, category, brief: resolved.brief, sample_id: resolved.sample_id },
+      });
+      if (!step.ok) throw new Error(step.error || FAILED);
+      push({ role: "assistant", kind: "answer", entry: { ...step.answer, cached: false } });
+      return;
+    }
+
     setStage("Reading the category conversation on Reddit, X and YouTube…");
     const began = Date.now();
     const deadline = began + 180000;
@@ -95,6 +105,16 @@ export default function useQualityChat() {
           return;
         }
         setError(started.error || FAILED);
+        return;
+      }
+
+      if (started.reused) {
+        setStage("Reading the sample already saved for this brand…");
+        const answered = await answer({
+          data: { question: content, category, research_id: started.research_id },
+        });
+        if (!answered.ok) throw new Error(answered.error || FAILED);
+        push({ role: "assistant", kind: "answer", entry: { ...answered.answer, cached: false } });
         return;
       }
 

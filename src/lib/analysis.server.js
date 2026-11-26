@@ -1,5 +1,6 @@
 import { buildQuery, collectScrape, rankScore, startScrape } from "@/lib/apify.server";
 import { buildBrandKeywords, gateByBrand } from "@/lib/brand-filter";
+import { findFreshResearch } from "@/lib/reuse.server";
 
 const TOP_N = 20;
 // Score a few more candidates than the report shows, so the generic name matches
@@ -385,6 +386,20 @@ export async function startPublicAnalysis({ base44, messages }) {
     goal: String(extracted?.goal || "").trim().slice(0, 300),
   };
   if (!brief.brand) return { ok: false, needBrand: true };
+
+  // This brand was read recently, so its posts and scored report are already saved:
+  // answer from them instead of paying for a second crawl.
+  const saved = await findFreshResearch({ base44, brand: brief.brand });
+  if (saved) {
+    return {
+      ok: true,
+      stage: "saved",
+      reused: true,
+      research_id: saved.id,
+      collected_at: saved.created_date || "",
+      brief,
+    };
+  }
 
   const { runs, warnings } = await startScrapes({
     brief,

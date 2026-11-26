@@ -1,0 +1,123 @@
+{
+  "name": "Sample",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Normalized category + region + brand set this sample answers"
+    },
+    "label": {
+      "type": "string",
+      "description": "Human label for the sample, e.g. footwear \u00b7 Canada"
+    },
+    "category": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "search": {
+      "type": "string",
+      "description": "The search phrase the posts were pulled with"
+    },
+    "brands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "reddit",
+          "x",
+          "youtube"
+        ]
+      }
+    },
+    "window_days": {
+      "type": "number"
+    },
+    "posts": {
+      "type": "array",
+      "description": "The collected posts, trimmed, so a later question is answered without another crawl",
+      "items": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "community": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "engagement": {
+            "type": "number"
+          },
+          "comments": {
+            "type": "number"
+          },
+          "views": {
+            "type": "number"
+          },
+          "shares": {
+            "type": "number"
+          },
+          "published_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "posts_count": {
+      "type": "number"
+    },
+    "research_id": {
+      "type": "string",
+      "description": "The report built from this sample, when one was saved"
+    },
+    "collected_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "category",
+    "collected_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

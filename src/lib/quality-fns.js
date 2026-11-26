@@ -10,6 +10,7 @@ import {
   tallyBrands,
 } from "@/lib/category.server";
 import { collectAndScore } from "@/lib/analysis.server";
+import { findSavedSample, sampleKey, saveSample } from "@/lib/reuse.server";
 
 // Same question, same key: a saved answer comes back instead of a second scrape.
 const keyOf = (question) =>
@@ -92,6 +93,7 @@ competitors on the query: ${research.competitors || "none"}
 posts ranked: ${posts.length} of ${Number(research.total_scraped) || posts.length} read
 sentiment: ${positive} positive, ${neutral} neutral, ${negative} negative; average score ${avg.toFixed(2)}
 post dates: ${dates[0] || "unknown"} to ${dates[dates.length - 1] || "unknown"}
+sample collected: ${day(research.created_date) || "unknown"}
 top communities: ${communities || "not reported by these platforms"}
 detected topics: ${topics || "none detected"}
 
@@ -224,6 +226,24 @@ export const startCategoryRead = createServerFn({ method: "POST" })
     const brief = await resolveCategory({ base44, question: data.question });
     if (!brief) return { ok: false, unclear: true };
 
+    // This category was read recently: answer from the saved posts, no crawl.
+    const saved = await findSavedSample({ base44, key: sampleKey(brief) });
+    if (saved) {
+      return {
+        ok: true,
+        reused: true,
+        sample_id: saved.id,
+        brief: {
+          category: saved.category,
+          region: saved.region || "",
+          search: saved.search || saved.category,
+          brands: saved.brands?.length ? saved.brands : brief.brands,
+          goal: brief.goal,
+          windowDays: Number(saved.window_days) || brief.windowDays,
+        },
+      };
+    }
+
     const { runs, warnings } = await startCategoryScrapes({ brief });
     if (!runs.length) {
       return { ok: false, error: warnings[0] || "No public posts turned up for that category." };
@@ -238,21 +258,39 @@ export const readCategoryAnswer = createServerFn({ method: "POST" })
       question: z.string().min(4).max(400),
       category: z.string().max(24).optional().default(""),
       brief: CategoryBriefInput,
-      runs: RunsInput,
+      runs: RunsInput.optional().default([]),
+      sample_id: z.string().max(64).optional().default(""),
       elapsedMs: z.number().min(0).max(600000).optional().default(0),
     })
   )
   .handler(async ({ data, context }) => {
     const base44 = context.getBase44().asServiceRole;
 
-    const sample = await readCategorySample({
-      brief: data.brief,
-      runs: data.runs,
-      elapsedMs: data.elapsedMs,
-    });
-    if (sample.pending) return { ok: true, stage: "scraping" };
+    let posts = [];
+    let reused = false;
+    let savedResearchId = "";
 
-    const posts = sample.posts;
+    if (data.sample_id) {
+      const saved = await base44.entities.Sample.get(data.sample_id).catch((error) => {
+        if (error?.status === 404) return null;
+        throw error;
+      });
+      if (!saved || !(saved.posts || []).length) {
+        return { ok: false, error: "That saved sample is gone. Ask again and I'll read it fresh." };
+      }
+      posts = saved.posts;
+      savedResearchId = saved.research_id || "";
+      reused = true;
+    } else {
+      const sample = await readCategorySample({
+        brief: data.brief,
+        runs: data.runs,
+        elapsedMs: data.elapsedMs,
+      });
+      if (sample.pending) return { ok: true, stage: "scraping" };
+      posts = sample.posts;
+    }
+
     if (!posts.length) {
       return { ok: false, error: "Nothing came back for that search. Try naming the category differently." };
     }
@@ -329,44 +367,57 @@ export const readCategoryAnswer = createServerFn({ method: "POST" })
     // The category answer keeps the full ranked read behind it too: the leading brand's
     // top 20 posts, scored for sentiment, saved as a normal report.
     const leader = ranked[0];
-    let researchId = "";
-    const step = await collectAndScore({
-      base44,
-      brief: {
-        brand: leader.brand,
-        category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
-        competitors: data.brief.brands.filter((brand) => brand !== leader.brand).slice(0, 3),
-        goal: data.question,
-        search: "",
-      },
-      runs: data.runs,
-      days: data.brief.windowDays,
-    });
+    let researchId = savedResearchId;
 
-    if (step.ok && !step.pending && step.posts.length) {
-      const research = await base44.entities.Research.create({
-        brand: leader.brand,
-        category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
-        competitors: data.brief.brands.filter((brand) => brand !== leader.brand).join(", "),
-        goal: data.question,
-        platforms: [...new Set(step.posts.map((post) => post.platform))],
-        status: "complete",
-        summary: step.summary,
-        themes: step.themes,
-        trending_topics: step.trending_topics,
-        recommendation: step.recommendation,
-        positive_count: step.counts.positive,
-        neutral_count: step.counts.neutral,
-        negative_count: step.counts.negative,
-        avg_sentiment: Number(step.avg.toFixed(2)),
-        total_scraped: step.totalScraped,
-        warnings: step.warnings,
+    // A reused sample already carries its report, so only a fresh read builds one.
+    if (!reused) {
+      const step = await collectAndScore({
+        base44,
+        brief: {
+          brand: leader.brand,
+          category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
+          competitors: data.brief.brands.filter((brand) => brand !== leader.brand).slice(0, 3),
+          goal: data.question,
+          search: "",
+        },
+        runs: data.runs,
+        days: data.brief.windowDays,
       });
 
-      await base44.entities.Post.bulkCreate(
-        step.posts.map((post) => ({ ...post, research_id: research.id }))
-      );
-      researchId = research.id;
+      if (step.ok && !step.pending && step.posts.length) {
+        const research = await base44.entities.Research.create({
+          brand: leader.brand,
+          category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
+          competitors: data.brief.brands.filter((brand) => brand !== leader.brand).join(", "),
+          goal: data.question,
+          platforms: [...new Set(step.posts.map((post) => post.platform))],
+          status: "complete",
+          summary: step.summary,
+          themes: step.themes,
+          trending_topics: step.trending_topics,
+          recommendation: step.recommendation,
+          positive_count: step.counts.positive,
+          neutral_count: step.counts.neutral,
+          negative_count: step.counts.negative,
+          avg_sentiment: Number(step.avg.toFixed(2)),
+          total_scraped: step.totalScraped,
+          warnings: step.warnings,
+        });
+
+        await base44.entities.Post.bulkCreate(
+          step.posts.map((post) => ({ ...post, research_id: research.id }))
+        );
+        researchId = research.id;
+      }
+
+      // Keep the posts, so the next question about this category costs no crawl.
+      await saveSample({
+        base44,
+        key: sampleKey(data.brief),
+        brief: data.brief,
+        posts,
+        researchId,
+      });
     }
 
     const record = {
