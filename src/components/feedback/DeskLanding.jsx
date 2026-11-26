@@ -32,6 +32,10 @@ export default function DeskLanding() {
           <Link to="/build-guide" className="underline-offset-2 transition-colors hover:text-foreground hover:underline">
             How this is built
           </Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/quality-test" className="underline-offset-2 transition-colors hover:text-foreground hover:underline">
+            Data quality test
+          </Link>
         </div>
       </div>
     </div>

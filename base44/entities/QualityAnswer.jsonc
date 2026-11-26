@@ -1,0 +1,89 @@
+{
+  "name": "QualityAnswer",
+  "type": "object",
+  "properties": {
+    "question_key": {
+      "type": "string",
+      "description": "Normalized question text, used to return a saved answer instead of re-scraping"
+    },
+    "question": {
+      "type": "string",
+      "description": "The test question as asked"
+    },
+    "category": {
+      "type": "string",
+      "description": "trend, sentiment, community or competitive"
+    },
+    "answer": {
+      "type": "string",
+      "description": "The written answer, grounded in the scraped sample"
+    },
+    "points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Short supporting observations"
+    },
+    "evidence": {
+      "type": "array",
+      "description": "The posts the answer is drawn from",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "sentiment": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "research_id": {
+      "type": "string",
+      "description": "The run the answer was written from"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "posts_read": {
+      "type": "number"
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "question_key",
+    "question",
+    "answer"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
