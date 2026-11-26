@@ -9,6 +9,7 @@ import {
   startCategoryScrapes,
   tallyBrands,
 } from "@/lib/category.server";
+import { collectAndScore } from "@/lib/analysis.server";
 
 // Same question, same key: a saved answer comes back instead of a second scrape.
 const keyOf = (question) =>
@@ -325,6 +326,49 @@ export const readCategoryAnswer = createServerFn({ method: "POST" })
         ranked[0].posts
       } of ${matching} posts.`;
 
+    // The category answer keeps the full ranked read behind it too: the leading brand's
+    // top 20 posts, scored for sentiment, saved as a normal report.
+    const leader = ranked[0];
+    let researchId = "";
+    const step = await collectAndScore({
+      base44,
+      brief: {
+        brand: leader.brand,
+        category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
+        competitors: data.brief.brands.filter((brand) => brand !== leader.brand).slice(0, 3),
+        goal: data.question,
+        search: "",
+      },
+      runs: data.runs,
+      days: data.brief.windowDays,
+    });
+
+    if (step.ok && !step.pending && step.posts.length) {
+      const research = await base44.entities.Research.create({
+        brand: leader.brand,
+        category: data.brief.region ? `${data.brief.category} (${data.brief.region})` : data.brief.category,
+        competitors: data.brief.brands.filter((brand) => brand !== leader.brand).join(", "),
+        goal: data.question,
+        platforms: [...new Set(step.posts.map((post) => post.platform))],
+        status: "complete",
+        summary: step.summary,
+        themes: step.themes,
+        trending_topics: step.trending_topics,
+        recommendation: step.recommendation,
+        positive_count: step.counts.positive,
+        neutral_count: step.counts.neutral,
+        negative_count: step.counts.negative,
+        avg_sentiment: Number(step.avg.toFixed(2)),
+        total_scraped: step.totalScraped,
+        warnings: step.warnings,
+      });
+
+      await base44.entities.Post.bulkCreate(
+        step.posts.map((post) => ({ ...post, research_id: research.id }))
+      );
+      researchId = research.id;
+    }
+
     const record = {
       question_key: keyOf(data.question),
       question: data.question.slice(0, 400),
@@ -332,7 +376,7 @@ export const readCategoryAnswer = createServerFn({ method: "POST" })
       answer: text,
       points,
       evidence,
-      research_id: "",
+      research_id: researchId,
       brand: ranked[0].brand,
       posts_read: posts.length,
       platforms: [...new Set(posts.map((post) => post.platform))],
