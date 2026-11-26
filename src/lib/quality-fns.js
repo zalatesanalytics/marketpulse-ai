@@ -1,5 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import {
+  ANSWER_SCHEMA as CATEGORY_ANSWER_SCHEMA,
+  buildCategoryPrompt,
+  mentionsBrand,
+  readCategorySample,
+  resolveCategory,
+  startCategoryScrapes,
+  tallyBrands,
+} from "@/lib/category.server";
 
 // Same question, same key: a saved answer comes back instead of a second scrape.
 const keyOf = (question) =>
@@ -175,6 +184,158 @@ export const answerQualityQuestion = createServerFn({ method: "POST" })
       brand: research.brand || "",
       posts_read: posts.length,
       platforms: research.platforms || [],
+    };
+
+    const existing = await base44.entities.QualityAnswer.filter(
+      { question_key: record.question_key },
+      { limit: 1 }
+    );
+    const saved = existing.items[0]
+      ? await base44.entities.QualityAnswer.update(existing.items[0].id, record)
+      : await base44.entities.QualityAnswer.create(record);
+
+    return { ok: true, answer: saved };
+  });
+
+/* ------------------------------------------------------- category reads */
+
+const CategoryBriefInput = z.object({
+  category: z.string().min(2).max(80),
+  region: z.string().max(60).optional().default(""),
+  search: z.string().min(2).max(90),
+  brands: z.array(z.string().min(1).max(40)).min(2).max(5),
+  goal: z.string().max(240).optional().default(""),
+  windowDays: z.number().min(7).max(90),
+});
+
+const RunsInput = z
+  .array(z.object({ platform: z.enum(["reddit", "x", "youtube"]), runId: z.string().min(1).max(80) }))
+  .min(1)
+  .max(3);
+
+// No brand was named, so the desk works out the category, the brands that compete in it
+// and the search phrase itself before crawling — a category question gets an answer
+// instead of a request for a brand.
+export const startCategoryRead = createServerFn({ method: "POST" })
+  .validator(z.object({ question: z.string().min(4).max(400) }))
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44().asServiceRole;
+    const brief = await resolveCategory({ base44, question: data.question });
+    if (!brief) return { ok: false, unclear: true };
+
+    const { runs, warnings } = await startCategoryScrapes({ brief });
+    if (!runs.length) {
+      return { ok: false, error: warnings[0] || "No public posts turned up for that category." };
+    }
+    return { ok: true, brief, runs, warnings };
+  });
+
+// Polled until the crawls land, then brand mentions are counted and the answer written.
+export const readCategoryAnswer = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      question: z.string().min(4).max(400),
+      category: z.string().max(24).optional().default(""),
+      brief: CategoryBriefInput,
+      runs: RunsInput,
+      elapsedMs: z.number().min(0).max(600000).optional().default(0),
+    })
+  )
+  .handler(async ({ data, context }) => {
+    const base44 = context.getBase44().asServiceRole;
+
+    const sample = await readCategorySample({
+      brief: data.brief,
+      runs: data.runs,
+      elapsedMs: data.elapsedMs,
+    });
+    if (sample.pending) return { ok: true, stage: "scraping" };
+
+    const posts = sample.posts;
+    if (!posts.length) {
+      return { ok: false, error: "Nothing came back for that search. Try naming the category differently." };
+    }
+
+    const { ranked, matching } = tallyBrands(posts, data.brief.brands);
+    if (!ranked[0].posts) {
+      return { ok: false, error: `The posts that came back never named ${data.brief.brands.join(", ")}.` };
+    }
+
+    const digestPosts = posts
+      .filter((post) =>
+        ranked.some((entry) => mentionsBrand(`${post.title} ${post.excerpt}`, entry.brand))
+      )
+      .slice(0, 12);
+
+    const digest = digestPosts
+      .map((post, index) => {
+        const meta = [
+          post.platform,
+          post.community || post.author,
+          day(post.published_at) || "undated",
+          `${Number(post.engagement) || 0} likes`,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return `[${index + 1}] ${meta}\n${post.title}\n${String(post.excerpt || "")
+          .replace(/\s+/g, " ")
+          .slice(0, 200)}`;
+      })
+      .join("\n\n");
+
+    const out = await base44.integrations.Core.InvokeLLM({
+      prompt: buildCategoryPrompt({
+        question: data.question,
+        brief: data.brief,
+        posts,
+        ranked,
+        matching,
+        digest,
+      }),
+      response_json_schema: CATEGORY_ANSWER_SCHEMA,
+      model: "gemini_3_flash",
+    });
+
+    const picked = Array.isArray(out?.post_ids)
+      ? out.post_ids
+          .map(Number)
+          .filter((n) => Number.isInteger(n) && n >= 1 && n <= digestPosts.length)
+      : [];
+
+    const evidence = [...new Set(picked)].slice(0, 3).map((n) => {
+      const post = digestPosts[n - 1];
+      return {
+        title: String(post.title || "").slice(0, 150),
+        platform: post.platform || "",
+        url: post.url || "",
+        sentiment: "",
+      };
+    });
+
+    const points = ranked
+      .slice(0, 3)
+      .map((entry) => `${entry.brand}: named in ${entry.posts} of ${matching} posts`);
+    points.push(
+      `${data.brief.region ? `${data.brief.region} · ` : ""}last ${data.brief.windowDays} days · ${posts.length} posts pulled`
+    );
+
+    const text =
+      String(out?.answer || "").trim() ||
+      `${ranked[0].brand} is the most discussed of ${data.brief.brands.join(", ")} in this sample, with ${
+        ranked[0].posts
+      } of ${matching} posts.`;
+
+    const record = {
+      question_key: keyOf(data.question),
+      question: data.question.slice(0, 400),
+      category: data.category || "",
+      answer: text,
+      points,
+      evidence,
+      research_id: "",
+      brand: ranked[0].brand,
+      posts_read: posts.length,
+      platforms: [...new Set(posts.map((post) => post.platform))],
     };
 
     const existing = await base44.entities.QualityAnswer.filter(
